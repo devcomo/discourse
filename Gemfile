@@ -58,8 +58,10 @@ gem 'therubyracer', require: 'v8'
 gem 'thin'
 gem 'diffy'
 
+# Heroku stuff
 gem 'memcachier'
 gem 'dalli'
+gem 'mandrill-api'
 
 # Gem that enables support for plugins. It is required.
 gem 'discourse_plugin', path: 'vendor/gems/discourse_plugin'
