@@ -1,5 +1,7 @@
 source 'https://rubygems.org'
 
+ruby '1.9.3'
+
 gem 'active_model_serializers', git: 'git://github.com/rails-api/active_model_serializers.git'
 gem 'ember-rails', git: 'git://github.com/emberjs/ember-rails.git' # so we get the pre version
 gem 'vestal_versions', git: 'git://github.com/zhangyuan/vestal_versions'
@@ -56,6 +58,9 @@ gem 'therubyracer', require: 'v8'
 gem 'thin'
 gem 'diffy'
 
+gem 'memcachier'
+gem 'dalli'
+
 # Gem that enables support for plugins. It is required.
 gem 'discourse_plugin', path: 'vendor/gems/discourse_plugin'
 
@@ -103,6 +108,7 @@ group :development do
   gem 'binding_of_caller'
   gem 'librarian', '>= 0.0.25', require: false
   gem 'pry-rails'
+  gem 'foreman'
 end
 
 # this is an optional gem, it provides a high performance replacement
@@ -122,3 +128,4 @@ group :profile do
   # if you need to profile, uncomment out this line
   # gem 'rack-perftools_profiler', require: 'rack/perftools_profiler', platform: :mri_19
 end
+
