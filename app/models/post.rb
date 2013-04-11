@@ -26,7 +26,7 @@ class Post < ActiveRecord::Base
   has_many :post_actions
 
   validates_presence_of :raw, :user_id, :topic_id
-  validates :raw, stripped_length: { in: SiteSetting.post_length }
+  validates :raw, stripped_length: { in: -> { SiteSetting.post_length } }
   validate :raw_quality
   validate :max_mention_validator
   validate :max_images_validator
@@ -40,8 +40,8 @@ class Post < ActiveRecord::Base
 
   scope :by_newest, order('created_at desc, id desc')
   scope :with_user, includes(:user)
-  scope :public_posts, lambda { joins(:topic).where('topics.archetype <> ?', [Archetype.private_message]) }
-  scope :private_posts, lambda { joins(:topic).where('topics.archetype = ?', Archetype.private_message) }
+  scope :public_posts, -> { joins(:topic).where('topics.archetype <> ?', Archetype.private_message) }
+  scope :private_posts, -> { joins(:topic).where('topics.archetype = ?', Archetype.private_message) }
 
   def self.hidden_reasons
     @hidden_reasons ||= Enum.new(:flag_threshold_reached, :flag_threshold_reached_again)
@@ -52,15 +52,9 @@ class Post < ActiveRecord::Base
   end
 
   def raw_quality
-    sentinel = TextSentinel.new(raw, min_entropy: SiteSetting.body_min_entropy)
-    if sentinel.valid?
-      # It's possible the sentinel has cleaned up the title a bit
-      self.raw = sentinel.text
-    else
-      errors.add(:raw, I18n.t(:is_invalid)) unless sentinel.valid?
-    end
+    sentinel = TextSentinel.body_sentinel(raw)
+    errors.add(:raw, I18n.t(:is_invalid)) unless sentinel.valid?
   end
-
 
   # Stop us from posting the same thing too quickly
   def unique_post_validator
