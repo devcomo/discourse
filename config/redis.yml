@@ -3,6 +3,8 @@ defaults: &defaults
   host: <%= uri.host %>
   port: <%= uri.port %>
   password: <%= uri.password %>
+  db: 0
+  cache_db: 0
 
 development:
   <<: *defaults
