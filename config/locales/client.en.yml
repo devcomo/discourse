@@ -303,6 +303,7 @@ en:
       show_preview: 'show preview &raquo;'
       hide_preview: '&laquo; hide preview'
 
+      quote_post_title: "Quote whole post"
       bold_title: "Strong"
       bold_text: "strong text"
       italic_title: "Emphasis"
@@ -312,7 +313,7 @@ en:
       link_dialog_title: "Insert Hyperlink"
       link_optional_text: "optional title"
       quote_title: "Blockquote"
-      quote_text: "Quote whole post"
+      quote_text: "Blockquote"
       code_title: "Code Sample"
       code_text: "enter code here"
       image_title: "Image"
@@ -608,7 +609,6 @@ en:
           off_topic: "Undo flag"
           spam: "Undo flag"
           inappropriate: "Undo flag"
-          custom_flag: "Undo flag"
           bookmark: "Undo bookmark"
           like: "Undo like"
           vote: "Undo vote"
@@ -616,7 +616,8 @@ en:
           off_topic: "{{icons}} marked this as off-topic"
           spam: "{{icons}} marked this as spam"
           inappropriate: "{{icons}} marked this as inappropriate"
-          custom_flag: "{{icons}} flagged this"
+          notify_moderators: "{{icons}} flagged this"
+          notify_user: "{{icons}} started a private conversation"
           bookmark: "{{icons}} bookmarked this"
           like: "{{icons}} liked this"
           vote: "{{icons}} voted for this"
@@ -624,7 +625,8 @@ en:
           off_topic: "You flagged this as off-topic"
           spam: "You flagged this as spam"
           inappropriate: "You flagged this as inappropriate"
-          custom_flag: "You flagged this for moderation"
+          notify_moderators: "You flagged this for moderation"
+          notify_user: "You started a private conversation with this user"
           bookmark: "You bookmarked this post"
           like: "You liked this"
           vote: "You voted for this post"
@@ -638,9 +640,12 @@ en:
           inappropriate:
             one: "You and 1 other flagged this as inappropriate"
             other: "You and {{count}} other people flagged this as inappropriate"
-          custom_flag:
+          notify_moderators:
             one: "You and 1 other flagged this for moderation"
             other: "You and {{count}} other people flagged this for moderation"
+          notify_user:
+            one: "You and 1 other started a private conversation with this user"
+            other: "You and {{count}} other started a private conversation with this user"
           bookmark:
             one: "You and 1 other bookmarked this post"
             other: "You and {{count}} other people bookmarked this post"
@@ -660,9 +665,12 @@ en:
           inappropriate:
             one: "1 person flagged this as inappropriate"
             other: "{{count}} people flagged this as inappropriate"
-          custom_flag:
+          notify_moderators:
             one: "1 person flagged this for moderation"
             other: "{{count}} people flagged this for moderation"
+          notify_user:
+            one: "1 person started a private conversation with this user"
+            other: "{{count}} started a private conversation with this user"
           bookmark:
             one: "1 person bookmarked this post"
             other: "{{count}} people bookmarked this post"
@@ -713,7 +721,8 @@ en:
       title: 'Why are you flagging this post?'
       action: 'Flag Post'
       cant: "Sorry, you can't flag this post at this time."
-      custom_placeholder: "Why does this post require moderator attention? Let us know specifically what you are concerned about, and provide relevant links where possible."
+      custom_placeholder_notify_user: "Why are you contacting this user privately?"
+      custom_placeholder_notify_moderators: "Why does this post require moderator attention? Let us know specifically what you are concerned about, and provide relevant links where possible."
       custom_message:
         at_least: "enter at least {{n}} characters"
         more: "{{n}} to go..."
