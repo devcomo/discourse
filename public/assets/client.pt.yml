@@ -1,6 +1,10 @@
 # encoding: utf-8
 # This file contains content for the client portion of Discourse, sent out
 # to the Javascript app.
+#
+# To validate this YAML file after you change it, please paste it into
+# http://yamllint.com/
+
 
 pt:
   js:
@@ -47,7 +51,6 @@ pt:
       "6": "Respostas"
 
     user:
-      information: "Informação do Utilizador"
       profile: Perfil
       title: "Utilizador"
       mute: Silenciar
@@ -622,7 +625,7 @@ pt:
         delete_confirm: "Apagar esta personalização?"
 
       email_logs:
-        title: "Email Logs"
+        title: "Email"
         sent_at: "Enviado a"
         email_type: "Tipo de Email"
         to_address: "Para (endereço)"
@@ -668,7 +671,6 @@ pt:
         grant_admin: 'Conceder Admin'
         revoke_moderation: 'Revogar Moderação'
         grant_moderation: 'Conceder Moderação'
-        basics: Básicos
         reputation: Reputação
         permissions: Permissões
         activity: Atividade

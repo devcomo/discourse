@@ -1,4 +1,9 @@
 # encoding: utf-8
+# This file contains content for the server portion of Discourse used by Ruby
+#
+# To validate this YAML file after you change it, please paste it into
+# http://yamllint.com/
+
 de:
   time:
     formats:
@@ -91,7 +96,7 @@ de:
     post_template: "%{replace_paragraph}\n\nBenutze den folgenden Platz für eine ausführliche Beschreibung sowie für Regeln und zur Diskussion!"
 
   trust_levels:
-    visitor:
+    newuser:
       title: "Gast"
     basic:
       title: "Anfänger"
@@ -427,9 +432,9 @@ de:
     basic_requires_topics_entered: "Zahl der Themen, die ein neuer Nutzer erstellen muss, bevor er zum sporadischen Nutzer (Vertrauenswürdigkeit 1) aufsteigt."
     basic_requires_read_posts: "Zahl der Beiträge, die ein neuer Nutzer lesen muss, bevor bevor er zum sporadischen Nutzer (Vertrauenswürdigkeit 1) aufsteigt."
     basic_requires_time_spent_mins: "Minuten, die ein neuer Nutzer Beiträge lesen muss, bevor er zum sporadischen Nutzer (Vertrauenswürdigkeit 1) aufsteigt."
-    visitor_max_links: "Maximale Zahl der Links, die Gäste Beiträgen hinzufügen dürfen."
-    visitor_max_images: "Maximale Zahl der Bilder, die Gäste Beiträgen hinzufügen dürfen."
-    visitor_max_mentions_per_post: "Maximale Zahl der @Namens-Erwähnungen, die Gäste in Beiträgen nutzen dürfen."
+    newuser_max_links: "Maximale Zahl der Links, die Gäste Beiträgen hinzufügen dürfen."
+    newuser_max_images: "Maximale Zahl der Bilder, die Gäste Beiträgen hinzufügen dürfen."
+    newuser_max_mentions_per_post: "Maximale Zahl der @Namens-Erwähnungen, die Gäste in Beiträgen nutzen dürfen."
     max_mentions_per_post: "Maximale Zahl der @Namens-Erwähnungen, die man in einem Beitrag nutzen kann."
 
     auto_link_images_wider_than: "Pixelbreite, ab der Bilder automatisch verlinkt und verkleinert in einer Lightbox dargestellt werden."
@@ -446,7 +451,7 @@ de:
     min_body_similar_length: "Minimale Länge eines Beitragstextes, bevor nach ähnlichen Themen gesucht wird."
 
     category_colors: "Eine durch senkrechte Striche getrennte Liste hexadezimaler Farbwerte, die als Kategoriefarben erlaubt sind."
-    max_upload_size_kb: "Maximale Größe in Kilobytes (KB), die von Benutzer hochgeladene Bilder groß sein dürfen. Stelle sicher, dass dieser Wert auch in nginx (client_max_body_size) / apache und Proxies konfiguriert ist."
+    max_upload_size_kb: "Maximale Größe in Kilobytes (kB), die von Benutzer hochgeladene Bilder groß sein dürfen. Stelle sicher, dass dieser Wert auch in nginx (client_max_body_size) / apache und Proxies konfiguriert ist."
     max_similar_results: "Zahl der Themen, die ein Nutzer sieht während sei ein neues Thema erstellen."
 
   notification_types:

@@ -1,6 +1,10 @@
 # encoding: utf-8
 # This file contains content for the client portion of Discourse, sent out
 # to the Javascript app.
+#
+# To validate this YAML file after you change it, please paste it into
+# http://yamllint.com/
+
 
 sv:
   js:
@@ -52,7 +56,6 @@ sv:
       "6": "Svar"
 
     user:
-      information: "Användarinformation"
       profile: Profil
       title: "Användare"
       mute: Dämpa
@@ -798,7 +801,6 @@ sv:
         please_upgrade: "Var god uppgradera!"
         installed_version: "Installerad"
         latest_version: "Senaste"
-        update_often: "Snälla uppdatera ofta!"
         problems_found: "Några problem har hittas med din installation av Discourse:"
         moderators: 'Moderatorer:'
         admins: 'Administratörer:'
@@ -816,7 +818,7 @@ sv:
         view_chart: "Visa som Stapeldiagram"
 
       commits:
-        latest_changes: "Senaste ändringarna."
+        latest_changes: "Senaste ändringarna: snälla uppdatera ofta!"
         by: "av"
 
       flags:
@@ -893,7 +895,6 @@ sv:
         grant_admin: 'Bevilja Administratör'
         revoke_moderation: 'Återkalla Moderering'
         grant_moderation: 'Bevilja Moderering'
-        basics: Grundläggande
         reputation: Rykte
         permissions: Rättigheter
         activity: Aktivitet

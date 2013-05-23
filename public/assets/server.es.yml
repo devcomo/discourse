@@ -1,4 +1,8 @@
-# Updated with client.en.yml from commit 21b5183d6ab8c41ede8371d00e834865d3b35299
+# encoding: utf-8
+# This file contains content for the server portion of Discourse used by Ruby
+#
+# To validate this YAML file after you change it, please paste it into
+# http://yamllint.com/
 
 es:
   time:
@@ -36,11 +40,11 @@ es:
 
       Keep in mind as you compose your topic:
 
-      - Does the title adequately describe what someone could reasonably expect to find if they opened your topic?
+      - Is your title interesting? Does it accurately describe what will be in your topic?
 
-      - The first post defines your topic: What is this about? Who would be interested in it? Why does it matter? What kind of responses are you hoping for from the community?
+      - What is this about? Who would be interested in it? Why does it matter? What kind of responses are you hoping for from the community?
 
-      - Try to choose the right words so others can *find* your topic. If it needs to be in a category, pick an appropriate category.
+      - Include good search words in your topic so others can *find* it. To group your topic with related topics, select a category.
 
       For more guidance, [see our FAQ](/faq). This panel will only appear for your first %{education_posts_text}.
 
@@ -51,9 +55,9 @@ es:
 
       - Does your reply improve the conversation in some way, however small?
 
-      - Treat your fellow community members with the same respect you'd wish to be treated.
+      - Be kind to your fellow community members.
 
-      - It's fine to be critical, but remember to criticize *ideas*, not people.
+      - Constructive criticism is welcome, but remember to criticize *ideas*, not people.
 
       For more guidance, [see our FAQ](/faq). This panel will only appear for your first %{education_posts_text}.
 
@@ -205,7 +209,7 @@ es:
       long_form: 'flagged this as off-topic'
     spam:
       title: 'Spam'
-      description: 'This post is effectively an advertisement with no disclosure. It is not useful or relevant to the current conversation, but promotional in nature.'
+      description: 'This post is an advertisement. It is not useful or relevant to the current conversation, but promotional in nature.'
       long_form: 'flagged this as spam'
     inappropriate:
       title: 'Inappropriate'
@@ -229,7 +233,7 @@ es:
       long_form: 'voted for this post'
 
   flagging:
-    you_must_edit: '<p>Your post reached the flagging threshold. Please see your private messages.</p>'
+    you_must_edit: '<p>Your post was flagged by the community. Please see your private messages.</p>'
     user_must_edit: '<p>Flagged content hidden.</p>'
 
   archetypes:
@@ -312,11 +316,11 @@ es:
     logo_small_url: "The small logo for your site used when scrolling down on topics eg: http://example.com/logo-small.png"
     favicon_url: "A favicon for your site, see http://en.wikipedia.org/wiki/Favicon"
     notification_email: "The return email address used when sending system emails such as notifying users of lost passwords, new accounts etc"
-    use_ssl: "Should the site be accessible via SSL?"
+    use_ssl: "Should the site be accessible via SSL? (NOT IMPLEMENTED, EXPERIMENTAL)"
     best_of_score_threshold: "The minimum score of a post to be included in the 'best of'"
     best_of_posts_required: "Minimum posts in a topic before 'best of' mode is enabled"
     best_of_likes_required: "Minimum likes in a topic before the 'best of' mode will be enabled"
-    enable_private_messages: "Allow basic (1) trust level users to create private messages and reply to private conversations"
+    enable_private_messages: "Allow basic (1) trust level users to create private messages and reply to private messages"
 
     enable_long_polling: "Message bus used for notification can use long polling"
     long_polling_interval: "Interval before a new long poll is issued in milliseconds "
@@ -329,7 +333,7 @@ es:
     flags_required_to_hide_post: "Number of flags that cause a post to be automatically hidden and PM sent to the user (0 for never)"
     cooldown_minutes_after_hiding_posts: "Number of minutes a user must wait before they can edit the post that was hidden due to flagging"
 
-    traditional_markdown_linebreaks: "Use traditional linebreaks in Markdown, instead of requiring two trailing spaces for a linebreak"
+    traditional_markdown_linebreaks: "Use traditional linebreaks in Markdown, which require two trailing spaces for a linebreak"
     post_undo_action_window_mins: "Number of seconds users are allowed to reverse actions on a post (like, flag, etc)"
     must_approve_users: "Admins must approve all users before they gain access"
     ga_tracking_code: "Google analytics tracking code code, eg: UA-12345678-9; see http://google.com/analytics"
@@ -579,41 +583,41 @@ es:
       text_body_template: |
         This private message has a few quick tips to get you started:
 
-        ### Keep Scrolling
+        ### Keep scrolling
 
-        There is no next page button or page numbers -- to keep reading, just keep scrolling down, and more content will load!
+        There are no next page buttons or page numbers – to read more, just keep scrolling down, and more content will load!
 
         As new replies come in, they will appear automatically at the bottom of the topic. No need to refresh the page or re-enter the topic to see new posts.
 
-        ### How Do I Reply?
+        ### How do I reply?
 
         - To reply to a specific post, use the Reply button at the bottom of that post.
 
-        - If you want to reply to the overall *theme* of the topic, rather than any specific person in the topic, use the Reply button at the very bottom of the topic.
+        - If you want to reply to the overall *theme* of the topic, rather than any specific post in the topic, use the Reply button at the very bottom of the topic.
 
         - If you want to take the conversation in a different direction, but keep them linked together, use Reply as New Topic to the right of the post.
 
-        ### Who is Talking to Me?
+        ### Who is talking to me?
 
-        When someone replies to your post, quotes you, or mentions your @username, a notification will appear at the top of the page. Click or tap the notification number to see who's talking to you, and where. Join the conversation!
+        When someone replies to your post, quotes you, or mentions your @username, a notification ➀ will appear at the top of the page. Click or tap that notification number to see who's talking to you, and where. Join the conversation!
 
         - To mention someone's name, start typing `@` and an autocompleter will pop up.
 
+        - To quote just a section of a post, select it, then click the Reply button that appears over the highlight.
+
         - To quote an entire post, use the Import Quote button on the composer toolbar.
 
-        - To quote just a section of a post, highlight it, then click the Reply button that appears over the highlight.
+        ### Look at that post!
 
-        ### Look at That Post!
-
-        To let someone know that you enjoyed their post, click the like button at the bottom of the post. If you see a problem with a post, don't hesitate to click the flag button and let the moderators -- and your fellow community members -- know about it.
+        To let someone know that you enjoyed their post, click the like ♥ button at the bottom of the post. If you see a problem with a post, don't hesitate to click the flag button and let the moderators – and your fellow community members – know about it.
 
         ### Where am I?
 
-        - To get back to the home page at any time, **click the icon at the upper left.**
+        - To get back to the home page at any time, **click the logo at the upper left** or use the back ← button on your browser.
 
-        - To search, visit your user page, or otherwise navigate, click on the icons at the upper right.
+        - For search, your user page, or the sitemap, click on the icons at the upper right.
 
-        - While reading a topic, you can move to the top by clicking its title at the top of the page. To reach the *bottom*, click the down arrow on the topic progress indicator at the bottom of the page, or click the last post field on the topic summary under the first post.
+        - While reading a topic, move to the top ↑ by clicking its title at the top of the page. To reach the *bottom* ↓, click the down arrow on the topic progress indicator at the bottom of the page, or click the last post field on the topic summary under the first post.
 
     welcome_approved:
       subject_template: "You've been approved on %{site_name}!"
@@ -631,8 +635,6 @@ es:
     welcome_user:
       subject_template: "Welcome to %{site_name}!"
       text_body_template: |
-        Hi there!
-
         Thanks for joining %{site_name}, and welcome to our discussion forum!
 
         %{new_user_tips}
@@ -680,9 +682,9 @@ es:
       description: "Not interested in getting these emails? No problem! Click below to unsubscribe instantly:"
 
     user_invited_to_private_message:
-      subject_template: "[%{site_name}] %{username} invited you to a private conversation '%{topic_title}'"
+      subject_template: "[%{site_name}] %{username} invited you to a private message '%{topic_title}'"
       text_body_template: |
-        %{username} invited you to a private conversation '%{topic_title}' on %{site_name}:
+        %{username} invited you to a private message '%{topic_title}' on %{site_name}:
 
         Please visit this link to view the topic: %{base_url}%{url}
 

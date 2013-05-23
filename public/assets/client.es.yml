@@ -2,6 +2,9 @@
 # to the Javascript app.
 #
 # Updated with client.en.yml from commit 21b5183d6ab8c41ede8371d00e834865d3b35299
+#
+# To validate this YAML file after you change it, please paste it into
+# http://yamllint.com/
 
 es:
   js:
@@ -51,7 +54,6 @@ es:
       "6": "Respuestas"
 
     user:
-      information: "Información de Usuario"
       profile: Perfil
       title: "Usuario"
       mute: Silenciar
@@ -303,7 +305,7 @@ es:
       link_dialog_title: "Insert Hyperlink"
       link_optional_text: "optional title"
       quote_title: "Blockquote"
-      quote_text: "Quote whole post"
+      quote_text: "Blockquote"
       code_title: "Code Sample"
       code_text: "enter code here"
       image_title: "Image"
@@ -461,7 +463,7 @@ es:
         invisible: "Make Invisible"
         visible: "Make Visible"
         reset_read: "Reset Read Data"
-        multi_select: "Toggle Multi-Select"
+        multi_select: "Select for Merge/Split"
         convert_to_topic: "Convert to Regular Topic"
 
       reply:
@@ -479,15 +481,16 @@ es:
       inviting: "Inviting..."
 
       invite_private:
-        title: 'Invite to Private Conversation'
+        title: 'Invite to Private Message'
         email_or_username: "Invitee's Email or Username"
         email_or_username_placeholder: "email address or username"
         action: "Invite"
-        success: "Thanks! We've invited that user to participate in this private conversation."
+        success: "Thanks! We've invited that user to participate in this private message."
         error: "Sorry there was an error inviting that user."
 
       invite_reply:
         title: 'Invite Friends to Reply'
+        action: 'Email Invite'
         help: 'send invitations to friends so they can reply to this topic with a single click'
         email: "We'll send your friend a brief email allowing them to reply to this topic by clicking a link."
         email_placeholder: 'email address'
@@ -598,7 +601,7 @@ es:
       delete_confirm: "Are you sure you want to delete that category?"
       list: "List Categories"
       no_description: "There is no description for this category."
-      change_in_category_topic: "visit category topic to edit the description"
+      change_in_category_topic: "Edit Description"
 
     flagging:
       title: 'Why are you flagging this post?'
@@ -683,7 +686,7 @@ es:
       title: 'Discourse Admin'
 
       dashboard:
-        title: "Admin Dashboard"
+        title: "Dashboard"
         welcome: "Welcome to the admin section."
         version: "Installed version"
         up_to_date: "You are running the latest version of Discourse."
@@ -691,7 +694,6 @@ es:
         updates_available: "Updates are available."
         please_upgrade: "Please upgrade!"
         latest_version: "Latest version"
-        update_often: 'Please update often!'
 
         reports:
           today: "Today"
@@ -716,7 +718,7 @@ es:
         title: "Customize"
         header: "Header"
         css: "Stylesheet"
-        override_default: "Override default?"
+        override_default: "Do not include standard style sheet"
         enabled: "Enabled?"
         preview: "preview"
         undo_preview: "undo preview"
@@ -725,7 +727,7 @@ es:
         delete_confirm: "Delete this customization?"
 
       email_logs:
-        title: "Email Logs"
+        title: "Email"
         sent_at: "Sent At"
         email_type: "Email Type"
         to_address: "To Address"
@@ -771,7 +773,6 @@ es:
         grant_admin: 'Grant Admin'
         revoke_moderation: 'Revoke Moderation'
         grant_moderation: 'Grant Moderation'
-        basics: Basics
         reputation: Reputación
         permissions: Permisos
         activity: Actividad

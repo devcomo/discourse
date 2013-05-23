@@ -1,5 +1,8 @@
 # This file contains content for the client portion of Discourse, sent out
 # to the Javascript app.
+#
+# To validate this YAML file after you change it, please paste it into
+# http://yamllint.com/
 
 da:
   js:
@@ -49,7 +52,6 @@ da:
       "6": "Svar"
 
     user:
-      information: "Brugeroplysninger"
       profile: Profil
       title: "Bruger"
       mute: Mute
@@ -459,7 +461,7 @@ da:
         invisible: "Gør usynlig"
         visible: "Gør synlig"
         reset_read: "Glem hvilke emner jeg har læst"
-        multi_select: "Toggle Multi-Select"
+        multi_select: "Select for Merge/Split"
         convert_to_topic: "Konvertér til normalt emne"
 
       reply:
@@ -684,14 +686,13 @@ da:
       title: 'Discourse Admin'
 
       dashboard:
-        title: "Admin Dashboard"
+        title: "Dashboard"
         version: "Installed version"
         up_to_date: "You are running the latest version of Discourse."
         critical_available: "A critical update is available."
         updates_available: "Updates are available."
         please_upgrade: "Please upgrade!"
         latest_version: "Latest version"
-        update_often: 'Please update often!'
         total_users: "Total Users"
         moderator_short: "mod"
 
@@ -705,7 +706,7 @@ da:
           30_days_ago: "30 Days Ago"
 
       commits:
-        latest_changes: "Latest changes"
+        latest_changes: "Latest changes: please update often!"
         by: "by"
 
       flags:
@@ -723,7 +724,7 @@ da:
         title: "Customize"
         header: "Header"
         css: "Stylesheet"
-        override_default: "Override default?"
+        override_default: "Do not include standard style sheet"
         enabled: "Enabled?"
         preview: "preview"
         undo_preview: "undo preview"
@@ -734,7 +735,7 @@ da:
         delete_confirm: "Delete this customization?"
 
       email_logs:
-        title: "Email Logs"
+        title: "Email"
         sent_at: "Sent At"
         email_type: "Email Type"
         to_address: "To Address"
@@ -780,7 +781,6 @@ da:
         grant_admin: 'Grant Admin'
         revoke_moderation: 'Revoke Moderation'
         grant_moderation: 'Grant Moderation'
-        basics: Basics
         reputation: Reputation
         permissions: Permissions
         activity: Activity
@@ -797,5 +797,5 @@ da:
 
       site_settings:
         show_overriden: 'Only show overridden'
-        title: 'Site Settings'
+        title: 'Settings'
         reset: 'reset to default'
