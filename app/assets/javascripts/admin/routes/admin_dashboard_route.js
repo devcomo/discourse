@@ -8,8 +8,6 @@
 **/
 Discourse.AdminDashboardRoute = Discourse.Route.extend({
 
-  problemsCheckInterval: '1 minute ago',
-
   setupController: function(c) {
     this.fetchDashboardData(c);
     this.fetchGithubCommits(c);
@@ -22,7 +20,6 @@ Discourse.AdminDashboardRoute = Discourse.Route.extend({
   fetchDashboardData: function(c) {
     if( !c.get('dashboardFetchedAt') || Date.create('1 hour ago', 'en') > c.get('dashboardFetchedAt') ) {
       c.set('dashboardFetchedAt', new Date());
-      c.set('problemsFetchedAt', new Date());
       Discourse.AdminDashboard.find().then(function(d) {
         if( Discourse.SiteSettings.version_checks ){
           c.set('versionCheck', Discourse.VersionCheck.create(d.version_check));
@@ -32,21 +29,16 @@ Discourse.AdminDashboardRoute = Discourse.Route.extend({
         });
         c.set('admins', d.admins);
         c.set('moderators', d.moderators);
-        c.set('problems', d.problems);
+        c.set('top_referrers', d.top_referrers);
+        c.set('top_traffic_sources', d.top_traffic_sources);
+        c.set('top_referred_topics', d.top_referred_topics);
         c.set('loading', false);
       });
-    } else if( !c.get('problemsFetchedAt') || Date.create(this.problemsCheckInterval, 'en') > c.get('problemsFetchedAt') ) {
+    }
+
+    if( !c.get('problemsFetchedAt') || Date.create(c.problemsCheckInterval, 'en') > c.get('problemsFetchedAt') ) {
       c.set('problemsFetchedAt', new Date());
-      var _this = this;
-      Discourse.AdminDashboard.fetchProblems().then(function(d) {
-        c.set('problems', d.problems);
-        c.set('loading', false);
-        if( d.problems && d.problems.length > 0 ) {
-          _this.problemsCheckInterval = '1 minute ago';
-        } else {
-          _this.problemsCheckInterval = '10 minutes ago';
-        }
-      });
+      c.loadProblems();
     }
   },
 

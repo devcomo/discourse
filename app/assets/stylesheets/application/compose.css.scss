@@ -3,6 +3,16 @@
 @import "foundation/variables";
 @import "foundation/mixins";
 
+// hack, this needs to be done cleaner
+.private-message input.span8 {
+  width: 47%;
+}
+
+.composer-popup-container {
+  max-width: 1500px;
+  margin-left: auto;
+  margin-right: auto;
+}
 
 .composer-popup {
 
@@ -48,17 +58,56 @@
   a[href] {
     color: #000;
   }
+
+  .posts-count {
+    color: darken(#b5e8fd, 50%);
+    font-size: 12px;
+  }
 }
 
 .composer-popup:nth-of-type(2) {
   margin-left: 10px;
 }
 
+
+.autocomplete {
+  z-index: 9999;
+  position: absolute;
+  width: 200px;
+  background-color: $white;
+  border: 1px solid $gray;
+  ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    li {
+      border-bottom: 1px solid $light_gray;
+      a[href] {
+        padding: 5px;
+        display: block;
+        span.username {
+          color: lighten($black, 20);
+        }
+        span.name {
+          font-size: 11px;
+        }
+        &.selected {
+          background-color: $light_gray;
+        }
+        @include hover {
+          background-color: $light_gray;
+          text-decoration: none;
+        }
+      }
+    }
+  }
+}
+
 #reply-control {
   .requirements-not-met {
     background-color: rgba(255, 0, 0, 0.12);
   }
-  .toggle-preview, .draft-status, #image-uploading {
+  .toggle-preview, #draft-status, #image-uploading {
     position: absolute;
     bottom: -31px;
     margin-top: 0px;
@@ -72,9 +121,12 @@
     font-size: 12px;
     color: darken($gray, 40);
   }
-  .draft-status {
+  #draft-status {
     right: 51%;
     color: lighten($black, 60);
+    &.flash {
+      color: lighten($red, 20);
+    }
   }
   @include transition(height 0.4s ease);
   width: 100%;
@@ -181,38 +233,7 @@
     margin-right: auto;
     float: none;
   }
-  .autocomplete {
-    z-index: 999;
-    position: absolute;
-    width: 200px;
-    background-color: $white;
-    border: 1px solid $gray;
-    ul {
-      list-style: none;
-      padding: 0;
-      margin: 0;
-      li {
-        border-bottom: 1px solid $light_gray;
-        a[href] {
-          padding: 5px;
-          display: block;
-          span.username {
-            color: lighten($black, 20);
-          }
-          span.name {
-            font-size: 11px;
-          }
-          &.selected {
-            background-color: $light_gray;
-          }
-          @include hover {
-            background-color: $light_gray;
-            text-decoration: none;
-          }
-        }
-      }
-    }
-  }
+
   // When the post is new (new topic) the sizings are different
   &.edit-title {
     &.open {
@@ -224,6 +245,7 @@
         margin: 6px 10px 3px 0;
       }
       .wmd-controls {
+        @include transition(top 0.3s ease);
         top: 100px;
       }
     }
@@ -309,52 +331,53 @@
   margin-bottom: 10px;
 }
 
-#main #reply-control {
-  div.ac-wrap {
-    background-color: $white;
-    border: 1px solid #cccccc;
-    padding: 4px 10px;
-    @include border-radius-all(3px);
-    div.item {
-      float: left;
-      margin-right: 10px;
-      span {
-        padding-left: 5px;
-        height: 22px;
-        display: inline-block;
-        line-height: 22px;
-        vertical-align: bottom;
-      }
-      a {
-        margin-left: 4px;
-        font-size: 10px;
-        line-height: 10px;
-        padding: 2px 1px 1px 3px;
-        border-radius: 10px;
-        width: 10px;
-        display: inline-block;
-        border: 1px solid rgba(255, 255, 255, 0);
-        &:hover {
-          background-color: lighten($red, 45);
-          border: 1px solid lighten($red, 20);
-          text-decoration: none;
-          color: $white;
-        }
+
+div.ac-wrap {
+  background-color: $white;
+  border: 1px solid #cccccc;
+  padding: 4px 10px;
+  @include border-radius-all(3px);
+  div.item {
+    float: left;
+    margin-right: 10px;
+    span {
+      padding-left: 5px;
+      height: 22px;
+      display: inline-block;
+      line-height: 22px;
+      vertical-align: bottom;
+    }
+    a {
+      margin-left: 4px;
+      font-size: 10px;
+      line-height: 10px;
+      padding: 2px 1px 1px 3px;
+      border-radius: 10px;
+      width: 10px;
+      display: inline-block;
+      border: 1px solid rgba(255, 255, 255, 0);
+      &:hover {
+        background-color: lighten($red, 45);
+        border: 1px solid lighten($red, 20);
+        text-decoration: none;
+        color: $white;
       }
     }
-    input[type="text"] {
-      float: left;
-      margin-top: 5px;
-      border: 0;
-      padding: 0;
-      margin: 4px 0 0;
-      box-shadow: none;
-    }
+  }
+  input[type="text"] {
+    float: left;
+    margin-top: 5px;
+    border: 0;
+    padding: 0;
+    margin: 4px 0 0;
+    box-shadow: none;
   }
 }
 
+
 #reply-control.edit-title.private-message {
   .wmd-controls {
+    @include transition(top 0.3s ease);
     top: 140px;
   }
 }
@@ -453,6 +476,32 @@
       width: 1450px;
       left: auto;
       right: auto;
+    }
+  }
+}
+
+.admin-options-form {
+  margin-top: 8px;
+  display: none;
+}
+
+.auto-close-fields {
+  input {
+    width: 50px;
+  }
+}
+
+.edit-auto-close-modal {
+  form {
+    margin: 0;
+  }
+  .auto-close-fields {
+    i.icon-time {
+      font-size: 16px;
+      line-height: 8px;
+    }
+    input {
+      margin: 0;
     }
   }
 }

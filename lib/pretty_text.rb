@@ -87,7 +87,7 @@ module PrettyText
     @ctx.load(Rails.configuration.ember.handlebars_location)
     #@ctx.load(Rails.configuration.ember.ember_location)
 
-    @ctx.load(app_root + "app/assets/javascripts/external/sugar-1.3.5.js")
+    @ctx.load(app_root + "app/assets/javascripts/external_production/sugar-1.3.5.js")
     @ctx.eval("var Discourse = {}; Discourse.SiteSettings = #{SiteSetting.client_settings_json};")
     @ctx.eval("var window = {}; window.devicePixelRatio = 2;") # hack to make code think stuff is retina
 
@@ -235,26 +235,20 @@ module PrettyText
 
   class ExcerptParser < Nokogiri::XML::SAX::Document
 
-    class DoneException < StandardError; end
-
     attr_reader :excerpt
 
-    def initialize(length)
+    def initialize(length,options)
       @length = length
       @excerpt = ""
       @current_length = 0
+      @strip_links = options[:strip_links] == true
     end
 
-    def self.get_excerpt(html, length)
-      me = self.new(length)
+    def self.get_excerpt(html, length, options)
+      me = self.new(length,options)
       parser = Nokogiri::HTML::SAX::Parser.new(me)
-      begin
-        copy = "<div>"
-        copy << html unless html.nil?
-        copy << "</div>"
+      catch(:done) do
         parser.parse(html) unless html.nil?
-      rescue DoneException
-        # we are done
       end
       me.excerpt
     end
@@ -271,11 +265,13 @@ module PrettyText
             characters("[image]")
           end
         when "a"
-          c = "<a "
-          c << attributes.map{|k,v| "#{k}='#{v}'"}.join(' ')
-          c << ">"
-          characters(c, false, false, false)
-          @in_a = true
+          unless @strip_links
+            c = "<a "
+            c << attributes.map{|k,v| "#{k}='#{v}'"}.join(' ')
+            c << ">"
+            characters(c, false, false, false)
+            @in_a = true
+          end
         when "aside"
           @in_quote = true
       end
@@ -284,8 +280,10 @@ module PrettyText
     def end_element(name)
       case name
       when "a"
-        characters("</a>",false, false, false)
-        @in_a = false
+        unless @strip_links
+          characters("</a>",false, false, false)
+          @in_a = false
+        end
       when "p", "br"
         characters(" ")
       when "aside"
@@ -296,20 +294,20 @@ module PrettyText
     def characters(string, truncate = true, count_it = true, encode = true)
       return if @in_quote
       encode = encode ? lambda{|s| ERB::Util.html_escape(s)} : lambda {|s| s}
-      if @current_length + string.length > @length && count_it
-        @excerpt << encode.call(string[0..(@length-@current_length)-1]) if truncate
+      if count_it && @current_length + string.length > @length
+        length = [0, @length - @current_length - 1].max
+        @excerpt << encode.call(string[0..length]) if truncate
         @excerpt << "&hellip;"
         @excerpt << "</a>" if @in_a
-        raise DoneException.new
+        throw :done
       end
       @excerpt << encode.call(string)
       @current_length += string.length if count_it
     end
   end
 
-  def self.excerpt(html, length)
-    ExcerptParser.get_excerpt(html, length)
+  def self.excerpt(html, max_length, options={})
+    ExcerptParser.get_excerpt(html, max_length, options)
   end
 
 end
-

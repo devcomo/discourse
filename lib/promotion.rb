@@ -21,13 +21,12 @@ class Promotion
     false
   end
 
-  def review_visitor
+  def review_newuser
     return false if @user.topics_entered < SiteSetting.basic_requires_topics_entered
     return false if @user.posts_read_count < SiteSetting.basic_requires_read_posts
     return false if (@user.time_read / 60) < SiteSetting.basic_requires_time_spent_mins
 
-    @user.trust_level = TrustLevel.levels[:basic]
-    @user.save
+    @user.change_trust_level!(:basic)
 
     true
   end
@@ -41,8 +40,7 @@ class Promotion
     return false if @user.likes_given < SiteSetting.regular_requires_likes_given
     return false if @user.topic_reply_count < SiteSetting.regular_requires_topic_reply_count
 
-    @user.trust_level = TrustLevel.levels[:regular]
-    @user.save
+    @user.change_trust_level!(:regular)
   end
 
 end

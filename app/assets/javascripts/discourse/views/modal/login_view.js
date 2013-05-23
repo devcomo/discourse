@@ -49,7 +49,7 @@ Discourse.LoginView = Discourse.ModalBodyView.extend({
     this.set('loggingIn', true);
 
     var loginView = this;
-    Discourse.ajax(Discourse.getURL("/session"), {
+    Discourse.ajax("/session", {
       data: { login: this.get('loginName'), password: this.get('loginPassword') },
       type: 'POST'
     }).then(function (result) {
@@ -161,7 +161,7 @@ Discourse.LoginView = Discourse.ModalBodyView.extend({
     this.set('loginPassword', $('#hidden-login-form input[name=password]').val());
 
     var loginView = this;
-    Em.run.next(function() {
+    Em.run.schedule('afterRender', function() {
       $('#login-account-password').keydown(function(e) {
         if (e.keyCode === 13) {
           loginView.login();

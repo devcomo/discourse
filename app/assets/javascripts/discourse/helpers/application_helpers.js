@@ -1,4 +1,16 @@
 /**
+  Allows us to supply bindings without "binding" to a helper.
+**/
+function normalizeHash(hash, hashTypes) {
+  for (var prop in hash) {
+    if (hashTypes[prop] === 'ID') {
+      hash[prop + 'Binding'] = hash[prop];
+      delete hash[prop];
+    }
+  }
+}
+
+/**
   Breaks up a long string
 
   @method breakUp
@@ -55,6 +67,37 @@ Handlebars.registerHelper('categoryLink', function(property, options) {
   var category = Ember.Handlebars.get(this, property, options);
   return new Handlebars.SafeString(Discourse.Utilities.categoryLink(category));
 });
+
+/**
+  Inserts a Discourse.TextField to allow the user to enter information.
+
+  @method textField
+  @for Handlebars
+**/
+Ember.Handlebars.registerHelper('textField', function(options) {
+  var hash = options.hash,
+      types = options.hashTypes;
+
+  normalizeHash(hash, types);
+
+  return Ember.Handlebars.helpers.view.call(this, Discourse.TextField, options);
+});
+
+/**
+  Inserts a Discourse.InputTipView
+
+  @method inputTip
+  @for Handlebars
+**/
+Ember.Handlebars.registerHelper('inputTip', function(options) {
+  var hash = options.hash,
+      types = options.hashTypes;
+
+  normalizeHash(hash, types);
+
+  return Ember.Handlebars.helpers.view.call(this, Discourse.InputTipView, options);
+});
+
 
 /**
   Produces a bound link to a category
@@ -130,24 +173,39 @@ Handlebars.registerHelper('avatar', function(user, options) {
     user = Ember.Handlebars.get(this, user, options);
   }
 
-  var username = Em.get(user, 'username');
-  if (!username) username = Em.get(user, options.hash.usernamePath);
+  if( user ) {
+    var username = Em.get(user, 'username');
+    if (!username) username = Em.get(user, options.hash.usernamePath);
 
-  var avatarTemplate = Ember.get(user, 'avatar_template');
-  if (!avatarTemplate) avatarTemplate = Em.get(user, 'user.avatar_template');
+    var avatarTemplate = Ember.get(user, 'avatar_template');
+    if (!avatarTemplate) avatarTemplate = Em.get(user, 'user.avatar_template');
 
-  var title;
-  if (!options.hash.ignoreTitle) {
-    title = Em.get(user, 'title') || Em.get(user, 'description');
+    var title;
+    if (!options.hash.ignoreTitle) {
+      // first try to get a title
+      title = Em.get(user, 'title');
+      // if there was no title provided
+      if (!title) {
+        // try to retrieve a description
+        var description = Em.get(user, 'description');
+        // if a description has been provided
+        if (description && description.length > 0) {
+          // preprend the username before the description
+          title = username + " - " + description;
+        }
+      }
+    }
+
+    return new Handlebars.SafeString(Discourse.Utilities.avatarImg({
+      size: options.hash.imageSize,
+      extraClasses: Em.get(user, 'extras') || options.hash.extraClasses,
+      username: username,
+      title: title || username,
+      avatarTemplate: avatarTemplate
+    }));
+  } else {
+    return '';
   }
-
-  return new Handlebars.SafeString(Discourse.Utilities.avatarImg({
-    size: options.hash.imageSize,
-    extraClasses: Em.get(user, 'extras') || options.hash.extraClasses,
-    username: username,
-    title: title || username,
-    avatarTemplate: avatarTemplate
-  }));
 });
 
 /**

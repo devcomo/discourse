@@ -17,8 +17,8 @@ Discourse.ForgotPasswordView = Discourse.ModalBodyView.extend({
 
   submit: function() {
 
-    Discourse.ajax(Discourse.getURL("/session/forgot_password"), {
-      data: { username: this.get('accountEmailOrUsername') },
+    Discourse.ajax("/session/forgot_password", {
+      data: { login: this.get('accountEmailOrUsername') },
       type: 'POST'
     });
 

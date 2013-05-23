@@ -8,7 +8,7 @@
 **/
 Discourse.FlaggedPost = Discourse.Post.extend({
 
-  flaggers: (function() {
+  flaggers: function() {
     var r,
       _this = this;
     r = [];
@@ -16,9 +16,9 @@ Discourse.FlaggedPost = Discourse.Post.extend({
       return r.push(_this.userLookup[a.user_id]);
     });
     return r;
-  }).property(),
+  }.property(),
 
-  messages: (function() {
+  messages: function() {
     var r,
       _this = this;
     r = [];
@@ -26,12 +26,13 @@ Discourse.FlaggedPost = Discourse.Post.extend({
       if (a.message) {
         return r.push({
           user: _this.userLookup[a.user_id],
-          message: a.message
+          message: a.message,
+          permalink: a.permalink
         });
       }
     });
     return r;
-  }).property(),
+  }.property(),
 
   lastFlagged: function() {
     return this.post_actions[0].created_at;
@@ -47,14 +48,14 @@ Discourse.FlaggedPost = Discourse.Post.extend({
 
   deletePost: function() {
     if (this.get('post_number') === "1") {
-      return Discourse.ajax(Discourse.getURL("/t/") + this.topic_id, { type: 'DELETE', cache: false });
+      return Discourse.ajax("/t/" + this.topic_id, { type: 'DELETE', cache: false });
     } else {
-      return Discourse.ajax(Discourse.getURL("/posts/") + this.id, { type: 'DELETE', cache: false });
+      return Discourse.ajax("/posts/" + this.id, { type: 'DELETE', cache: false });
     }
   },
 
   clearFlags: function() {
-    return Discourse.ajax(Discourse.getURL("/admin/flags/clear/") + this.id, { type: 'POST', cache: false });
+    return Discourse.ajax("/admin/flags/clear/" + this.id, { type: 'POST', cache: false });
   },
 
   hiddenClass: function() {
@@ -65,7 +66,7 @@ Discourse.FlaggedPost = Discourse.Post.extend({
 Discourse.FlaggedPost.reopenClass({
   findAll: function(filter) {
     var result = Em.A();
-    Discourse.ajax(Discourse.getURL("/admin/flags/") + filter + ".json").then(function(data) {
+    Discourse.ajax("/admin/flags/" + filter + ".json").then(function(data) {
       var userLookup = {};
       data.users.each(function(u) {
         userLookup[u.id] = Discourse.User.create(u);

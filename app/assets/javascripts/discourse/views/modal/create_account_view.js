@@ -242,7 +242,7 @@ Discourse.CreateAccountView = Discourse.ModalBodyView.extend({
 
   fetchConfirmationValue: function() {
     var createAccountView = this;
-    return Discourse.ajax(Discourse.getURL('/users/hp.json')).then(function (json) {
+    return Discourse.ajax('/users/hp.json').then(function (json) {
       createAccountView.set('accountPasswordConfirm', json.value);
       createAccountView.set('accountChallenge', json.challenge.split("").reverse().join(""));
     });
@@ -278,11 +278,11 @@ Discourse.CreateAccountView = Discourse.ModalBodyView.extend({
   didInsertElement: function(e) {
     // allows the submission the form when pressing 'ENTER' on *any* text input field
     // but only when the submit button is enabled
-    var _this = this;
-    return Em.run.next(function() {
-      return $("input[type='text']").keydown(function(e) {
-        if (_this.get('submitDisabled') === false && e.keyCode === 13) {
-          return _this.createAccount();
+    var createAccountView = this;
+    Em.run.schedule('afterRender', function() {
+      $("input[type='text'], input[type='password']").keydown(function(e) {
+        if (createAccountView.get('submitDisabled') === false && e.keyCode === 13) {
+          createAccountView.createAccount();
         }
       });
     });

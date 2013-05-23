@@ -1,6 +1,7 @@
 require 'sidekiq/web'
 
 require_dependency 'admin_constraint'
+require_dependency 'staff_constraint'
 require_dependency 'homepage_constraint'
 
 # This used to be User#username_format, but that causes a preload of the User object
@@ -21,11 +22,19 @@ Discourse::Application.routes.draw do
   end
   get 'srv/status' => 'forums#status'
 
-  namespace :admin, constraints: AdminConstraint.new do
+  namespace :admin, constraints: StaffConstraint.new do
     get '' => 'admin#index'
 
-    resources :site_settings
+    resources :site_settings, constraints: AdminConstraint.new
+
     get 'reports/:type' => 'reports#show'
+
+    resources :groups, constraints: AdminConstraint.new do
+      collection do
+        post 'refresh_automatic_groups' => 'groups#refresh_automatic_groups'
+      end
+      get 'users'
+    end
 
     resources :users, id: USERNAME_ROUTE_FORMAT do
       collection do
@@ -35,35 +44,37 @@ Discourse::Application.routes.draw do
       put 'ban'
       put 'delete_all_posts'
       put 'unban'
-      put 'revoke_admin'
-      put 'grant_admin'
-      put 'revoke_moderation'
-      put 'grant_moderation'
+      put 'revoke_admin', constraints: AdminConstraint.new
+      put 'grant_admin', constraints: AdminConstraint.new
+      put 'revoke_moderation', constraints: AdminConstraint.new
+      put 'grant_moderation', constraints: AdminConstraint.new
       put 'approve'
-      post 'refresh_browsers'
+      post 'refresh_browsers', constraints: AdminConstraint.new
+      put 'activate'
+      put 'deactivate'
     end
 
-    resources :impersonate
+    resources :impersonate, constraints: AdminConstraint.new
     resources :email_logs do
       collection do
         post 'test'
       end
     end
-    get 'customize' => 'site_customizations#index'
+    get 'customize' => 'site_customizations#index', constraints: AdminConstraint.new
     get 'flags' => 'flags#index'
     get 'flags/:filter' => 'flags#index'
     post 'flags/clear/:id' => 'flags#clear'
-    resources :site_customizations
-    resources :site_contents
-    resources :site_content_types
-    resources :export
+    resources :site_customizations, constraints: AdminConstraint.new
+    resources :site_contents, constraints: AdminConstraint.new
+    resources :site_content_types, constraints: AdminConstraint.new
+    resources :export, constraints: AdminConstraint.new
     get 'version_check' => 'versions#show'
     resources :dashboard, only: [:index] do
       collection do
         get 'problems'
       end
     end
-    resources :api, only: [:index] do
+    resources :api, only: [:index], constraints: AdminConstraint.new do
       collection do
         post 'generate_key'
       end
@@ -128,6 +139,8 @@ Discourse::Application.routes.draw do
     end
   end
 
+  get 'p/:post_id/:user_id' => 'posts#short_link'
+
   resources :notifications
   resources :categories
 
@@ -190,6 +203,7 @@ Discourse::Application.routes.draw do
   put 't/:topic_id/clear-pin' => 'topics#clear_pin', constraints: {topic_id: /\d+/}
   put 't/:topic_id/mute' => 'topics#mute', constraints: {topic_id: /\d+/}
   put 't/:topic_id/unmute' => 'topics#unmute', constraints: {topic_id: /\d+/}
+  put 't/:topic_id/autoclose' => 'topics#autoclose', constraints: {topic_id: /\d+/}
 
   get 't/:topic_id/:post_number' => 'topics#show', constraints: {topic_id: /\d+/, post_number: /\d+/}
   get 't/:slug/:topic_id.rss' => 'topics#feed', format: :rss, constraints: {topic_id: /\d+/}
@@ -198,9 +212,12 @@ Discourse::Application.routes.draw do
   post 't/:topic_id/timings' => 'topics#timings', constraints: {topic_id: /\d+/}
   post 't/:topic_id/invite' => 'topics#invite', constraints: {topic_id: /\d+/}
   post 't/:topic_id/move-posts' => 'topics#move_posts', constraints: {topic_id: /\d+/}
+  post 't/:topic_id/merge-topic' => 'topics#merge_topic', constraints: {topic_id: /\d+/}
   delete 't/:topic_id/timings' => 'topics#destroy_timings', constraints: {topic_id: /\d+/}
 
   post 't/:topic_id/notifications' => 'topics#set_notifications' , constraints: {topic_id: /\d+/}
+
+  get 'raw/:topic_id(/:post_number)' => 'posts#markdown'
 
 
   resources :invites

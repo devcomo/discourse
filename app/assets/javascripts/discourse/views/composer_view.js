@@ -27,7 +27,7 @@ Discourse.ComposerView = Discourse.View.extend({
   }.property('content.composeState'),
 
   draftStatus: function() {
-    this.$('.draft-status').text(this.get('content.draftStatus') || "");
+    $('#draft-status').text(this.get('content.draftStatus') || "");
   }.observes('content.draftStatus'),
 
   // Disable fields when we're loading
@@ -91,7 +91,7 @@ Discourse.ComposerView = Discourse.View.extend({
 
   resize: function() {
     // this still needs to wait on animations, need a clean way to do that
-    return Em.run.next(null, function() {
+    return Em.run.schedule('afterRender', function() {
       var replyControl = $('#reply-control');
       var h = replyControl.height() || 0;
       var sizePx = "" + h + "px";
@@ -167,17 +167,7 @@ Discourse.ComposerView = Discourse.View.extend({
 
     $LAB.script(assetPath('defer/html-sanitizer-bundle'));
     Discourse.ComposerView.trigger("initWmdEditor");
-    template = Handlebars.compile("<div class='autocomplete'>" +
-                                    "<ul>" +
-                                    "{{#each options}}" +
-                                      "<li>" +
-                                          "<a href='#'>{{avatar this imageSize=\"tiny\"}} " +
-                                          "<span class='username'>{{this.username}}</span> " +
-                                          "<span class='name'>{{this.name}}</span></a>" +
-                                      "</li>" +
-                                      "{{/each}}" +
-                                    "</ul>" +
-                                  "</div>");
+    template = Discourse.UserSelector.templateFunction();
 
     transformTemplate = Handlebars.compile("{{avatar this imageSize=\"tiny\"}} {{this.username}}");
     $wmdInput.data('init', true);
@@ -191,38 +181,6 @@ Discourse.ComposerView = Discourse.View.extend({
       },
       key: "@",
       transformComplete: function(v) { return v.username; }
-    });
-
-    selected = [];
-    $('#private-message-users').val(this.get('content.targetUsernames')).autocomplete({
-      template: template,
-
-      dataSource: function(term) {
-        return Discourse.UserSearch.search({
-          term: term,
-          topicId: _this.get('controller.controllers.topic.content.id'),
-          exclude: selected.concat([Discourse.get('currentUser.username')])
-        });
-      },
-
-      onChangeItems: function(items) {
-        items = $.map(items, function(i) {
-          if (i.username) {
-            return i.username;
-          } else {
-            return i;
-          }
-        });
-        _this.set('content.targetUsernames', items.join(","));
-        selected = items;
-      },
-
-      transformComplete: transformTemplate,
-
-      reverseTransform: function(i) {
-        return { username: i };
-      }
-
     });
 
     topic = this.get('topic');
@@ -305,7 +263,7 @@ Discourse.ComposerView = Discourse.View.extend({
       // cf. https://github.com/blueimp/jQuery-File-Upload/wiki/API#how-to-cancel-an-upload
       var jqXHR = data.xhr();
       // need to wait for the link to show up in the DOM
-      Em.run.next(function() {
+      Em.run.schedule('afterRender', function() {
         // bind on the click event on the cancel link
         $('#cancel-image-upload').on('click', function() {
           // cancel the upload
@@ -348,6 +306,10 @@ Discourse.ComposerView = Discourse.View.extend({
           case 415:
             bootbox.alert(Em.String.i18n('post.errors.only_images_are_supported'));
             return;
+          // 422 == there has been an error on the server (mostly due to FastImage)
+          case 422:
+            bootbox.alert(data.jqXHR.responseText);
+            return;
         }
       }
       // otherwise, display a generic error message
@@ -372,9 +334,11 @@ Discourse.ComposerView = Discourse.View.extend({
         caretPosition = Discourse.Utilities.caretPosition(ctrl),
         current = this.get('content.reply');
     this.set('content.reply', current.substring(0, caretPosition) + text + current.substring(caretPosition, current.length));
-    return Em.run.next(function() {
-      return Discourse.Utilities.setCaretPosition(ctrl, caretPosition + text.length);
+
+    Em.run.schedule('afterRender', function() {
+      Discourse.Utilities.setCaretPosition(ctrl, caretPosition + text.length);
     });
+
   },
 
   // Uses javascript to get the image sizes from the preview, if present
@@ -392,6 +356,19 @@ Discourse.ComposerView = Discourse.View.extend({
 
   childDidInsertElement: function(e) {
     return this.initEditor();
+  },
+
+  toggleAdminOptions: function() {
+    var $adminOpts = $('.admin-options-form'),
+        $wmd = $('.wmd-controls'),
+        wmdTop = parseInt($wmd.css('top'),10);
+    if( $adminOpts.is(':visible') ) {
+      $wmd.css('top', wmdTop - parseInt($adminOpts.css('height'),10) + 'px' );
+      $adminOpts.hide();
+    } else {
+      $adminOpts.show();
+      $wmd.css('top', wmdTop + parseInt($adminOpts.css('height'),10) + 'px' );
+    }
   }
 });
 

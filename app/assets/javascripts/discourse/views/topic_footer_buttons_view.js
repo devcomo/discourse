@@ -2,7 +2,7 @@
   This view is used for rendering the buttons at the footer of the topic
 
   @class TopicFooterButtonsView
-  @extends Discourse.View
+  @extends Ember.ContainerView
   @namespace Discourse
   @module Discourse
 **/
@@ -24,9 +24,14 @@ Discourse.TopicFooterButtonsView = Ember.ContainerView.extend({
 
         // We hide some controls from private messages
         if (this.get('topic.can_invite_to')) {
-          this.addObject(Discourse.ButtonView.create({
+          this.addObject(Discourse.ButtonView.createWithMixins({
             textKey: 'topic.invite_reply.title',
             helpKey: 'topic.invite_reply.help',
+            attributeBindings: ['disabled'],
+
+            disabled: function(){
+              return this.get('controller.content.archived') || this.get('controller.content.closed');
+            }.property('controller.content.archived', 'controller.content.closed'),
 
             renderIcon: function(buffer) {
               buffer.push("<i class='icon icon-group'></i>");
@@ -62,7 +67,7 @@ Discourse.TopicFooterButtonsView = Ember.ContainerView.extend({
         this.addObject(Discourse.ButtonView.create({
           textKey: 'topic.share.title',
           helpKey: 'topic.share.help',
-          'data-share-url': topic.get('url'),
+          'data-share-url': topic.get('shareUrl'),
 
           renderIcon: function(buffer) {
             buffer.push("<i class='icon icon-share'></i>");

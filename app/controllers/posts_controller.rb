@@ -4,8 +4,25 @@ require_dependency 'post_destroyer'
 class PostsController < ApplicationController
 
   # Need to be logged in for all actions here
-  before_filter :ensure_logged_in, except: [:show, :replies, :by_number]
+  before_filter :ensure_logged_in, except: [:show, :replies, :by_number, :short_link]
 
+  skip_before_filter :store_incoming_links, only: [:short_link]
+  skip_before_filter :check_xhr, only: [:markdown,:short_link]
+
+  def markdown
+    post = Post.where(topic_id: params[:topic_id].to_i, post_number: (params[:post_number] || 1).to_i).first
+    if post && guardian.can_see?(post)
+      render text: post.raw, content_type: 'text/plain'
+    else
+      raise Discourse::NotFound
+    end
+  end
+
+  def short_link
+    post = Post.find(params[:post_id].to_i)
+    IncomingLink.add(request,current_user)
+    redirect_to post.url
+  end
 
   def create
     requires_parameter(:post)
@@ -19,10 +36,14 @@ class PostsController < ApplicationController
                                    target_usernames: params[:target_usernames],
                                    reply_to_post_number: params[:post][:reply_to_post_number],
                                    image_sizes: params[:image_sizes],
-                                   meta_data: params[:meta_data])
+                                   meta_data: params[:meta_data],
+                                   auto_close_days: params[:auto_close_days])
     post = post_creator.create
-
     if post_creator.errors.present?
+
+      # If the post was spam, flag all the user's posts as spam
+      current_user.flag_linked_posts_as_spam if post_creator.spam?
+
       render_json_error(post_creator)
     else
       post_serializer = PostSerializer.new(post, scope: guardian, root: false)
@@ -75,7 +96,7 @@ class PostsController < ApplicationController
 
     result = {post: post_serializer.as_json}
     if revisor.category_changed.present?
-      result[:category] = CategorySerializer.new(revisor.category_changed, scope: guardian, root: false).as_json
+      result[:category] = BasicCategorySerializer.new(revisor.category_changed, scope: guardian, root: false).as_json
     end
 
     render_json_dump(result)
@@ -111,7 +132,7 @@ class PostsController < ApplicationController
   def recover
     post = find_post_from_params
     guardian.ensure_can_recover_post!(post)
-    post.recover
+    post.recover!
     render nothing: true
   end
 
@@ -169,8 +190,8 @@ class PostsController < ApplicationController
     def find_post_from_params
       finder = Post.where(id: params[:id] || params[:post_id])
 
-      # Include deleted posts if the user is a moderator
-      finder = finder.with_deleted if current_user.try(:moderator?)
+      # Include deleted posts if the user is staff
+      finder = finder.with_deleted if current_user.try(:staff?)
 
       post = finder.first
       guardian.ensure_can_see!(post)

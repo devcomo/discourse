@@ -3,19 +3,19 @@ require_dependency 'pretty_text'
 require_dependency 'rate_limiter'
 require_dependency 'post_revisor'
 require_dependency 'enum'
+require_dependency 'trashable'
 
 require 'archetype'
 require 'digest/sha1'
 
 class Post < ActiveRecord::Base
   include RateLimiter::OnCreateRecord
+  include Trashable
 
   versioned if: :raw_changed?
 
   rate_limit
-  acts_as_paranoid
 
-  after_recover :update_flagged_posts_count
 
   belongs_to :user
   belongs_to :topic, counter_cache: :posts_count
@@ -24,6 +24,8 @@ class Post < ActiveRecord::Base
   has_many :post_replies
   has_many :replies, through: :post_replies
   has_many :post_actions
+
+  has_one :post_search_data
 
   validates_presence_of :raw, :user_id, :topic_id
   validates :raw, stripped_length: { in: -> { SiteSetting.post_length } }
@@ -39,9 +41,11 @@ class Post < ActiveRecord::Base
   SHORT_POST_CHARS = 1200
 
   scope :by_newest, order('created_at desc, id desc')
+  scope :by_post_number, order('post_number ASC')
   scope :with_user, includes(:user)
   scope :public_posts, -> { joins(:topic).where('topics.archetype <> ?', Archetype.private_message) }
   scope :private_posts, -> { joins(:topic).where('topics.archetype = ?', Archetype.private_message) }
+  scope :with_topic_subtype, ->(subtype) { joins(:topic).where('topics.subtype = ?', subtype) }
 
   def self.hidden_reasons
     @hidden_reasons ||= Enum.new(:flag_threshold_reached, :flag_threshold_reached_again)
@@ -49,6 +53,11 @@ class Post < ActiveRecord::Base
 
   def self.types
     @types ||= Enum.new(:regular, :moderator_action)
+  end
+
+  def recover!
+    super
+    update_flagged_posts_count
   end
 
   def raw_quality
@@ -93,6 +102,7 @@ class Post < ActiveRecord::Base
     @white_listed_image_classes ||= ['avatar', 'favicon', 'thumbnail']
   end
 
+  # How many images are present in the post
   def image_count
     return 0 unless raw.present?
 
@@ -104,19 +114,28 @@ class Post < ActiveRecord::Base
     end.count
   end
 
-  def link_count
-    return 0 unless raw.present?
+  # Returns an array of all links in a post
+  def raw_links
+    return [] unless raw.present?
+
+    return @raw_links if @raw_links.present?
 
     # Don't include @mentions in the link count
-    total = 0
+    @raw_links = []
     cooked_document.search("a[href]").each do |l|
       html_class = l.attributes['class']
+      url = l.attributes['href'].to_s
       if html_class.present?
         next if html_class.to_s == 'mention' && l.attributes['href'].to_s =~ /^\/users\//
       end
-      total +=1
+      @raw_links << url
     end
-    total
+    @raw_links
+  end
+
+  # How many links are present in the post
+  def link_count
+    raw_links.size
   end
 
   # Sometimes the post is being edited by someone else, for example, a mod.
@@ -130,22 +149,61 @@ class Post < ActiveRecord::Base
     @acting_user = pu
   end
 
+  # Ensure maximum amount of mentions in a post
   def max_mention_validator
-    if acting_user.present? && acting_user.has_trust_level?(:basic)
-      errors.add(:base, I18n.t(:too_many_mentions, count: SiteSetting.max_mentions_per_post)) if raw_mentions.size > SiteSetting.max_mentions_per_post
+    if acting_user_is_trusted?
+      add_error_if_count_exceeded(:too_many_mentions, raw_mentions.size, SiteSetting.max_mentions_per_post)
     else
-      errors.add(:base, I18n.t(:too_many_mentions_visitor, count: SiteSetting.visitor_max_mentions_per_post)) if raw_mentions.size > SiteSetting.visitor_max_mentions_per_post
+      add_error_if_count_exceeded(:too_many_mentions_newuser, raw_mentions.size, SiteSetting.newuser_max_mentions_per_post)
     end
   end
 
+  # Ensure new users can not put too many images in a post
   def max_images_validator
-    return if acting_user.present? && acting_user.has_trust_level?(:basic)
-    errors.add(:base, I18n.t(:too_many_images, count: SiteSetting.visitor_max_images)) if image_count > SiteSetting.visitor_max_images
+    add_error_if_count_exceeded(:too_many_images, image_count, SiteSetting.newuser_max_images) unless acting_user_is_trusted?
   end
 
+  # Ensure new users can not put too many links in a post
   def max_links_validator
-    return if acting_user.present? && acting_user.has_trust_level?(:basic)
-    errors.add(:base, I18n.t(:too_many_links, count: SiteSetting.visitor_max_links)) if link_count > SiteSetting.visitor_max_links
+    add_error_if_count_exceeded(:too_many_links, link_count, SiteSetting.newuser_max_links) unless acting_user_is_trusted?
+  end
+
+
+  # Count how many hosts are linked in the post
+  def linked_hosts
+    return {} if raw_links.blank?
+
+    return @linked_hosts if @linked_hosts.present?
+
+    @linked_hosts = {}
+    raw_links.each do |u|
+      uri = URI.parse(u)
+      host = uri.host
+      @linked_hosts[host] = (@linked_hosts[host] || 0) + 1
+    end
+    @linked_hosts
+  end
+
+  def total_hosts_usage
+    hosts = linked_hosts.clone
+
+    # Count hosts in previous posts the user has made, PLUS these new ones
+    TopicLink.where(domain: hosts.keys, user_id: acting_user.id).each do |tl|
+      hosts[tl.domain] = (hosts[tl.domain] || 0) + 1
+    end
+
+    hosts
+  end
+
+  # Prevent new users from posting the same hosts too many times.
+  def has_host_spam?
+    return false if acting_user.present? && acting_user.has_trust_level?(:basic)
+
+    total_hosts_usage.each do |host, count|
+      return true if count >= SiteSetting.newuser_spam_host_threshold
+    end
+
+    false
   end
 
 
@@ -220,14 +278,14 @@ class Post < ActiveRecord::Base
                 user_id: user_id).first.try(:user)
   end
 
-  def self.excerpt(cooked, maxlength = nil)
+  def self.excerpt(cooked, maxlength = nil, options = {})
     maxlength ||= SiteSetting.post_excerpt_maxlength
-    PrettyText.excerpt(cooked, maxlength)
+    PrettyText.excerpt(cooked, maxlength, options)
   end
 
   # Strip out most of the markup
-  def excerpt(maxlength = nil)
-    Post.excerpt(cooked, maxlength)
+  def excerpt(maxlength = nil, options = {})
+    Post.excerpt(cooked, maxlength, options)
   end
 
   # What we use to cook posts
@@ -269,7 +327,26 @@ class Post < ActiveRecord::Base
   end
 
   def url
-    "/t/#{Slug.for(topic.title)}/#{topic.id}/#{post_number}"
+    Post.url(topic.slug, topic.id, post_number)
+  end
+
+  def self.url(slug, topic_id, post_number)
+    "/t/#{slug}/#{topic_id}/#{post_number}"
+  end
+
+  def self.urls(post_ids)
+    ids = post_ids.map{|u| u}
+    if ids.length > 0
+      urls = {}
+      Topic.joins(:posts).where('posts.id' => ids).
+        select(['posts.id as post_id','post_number', 'topics.slug', 'topics.title', 'topics.id']).
+      each do |t|
+        urls[t.post_id.to_i] = url(t.slug, t.id, t.post_number)
+      end
+      urls
+    else
+      {}
+    end
   end
 
   def author_readable
@@ -341,30 +418,21 @@ class Post < ActiveRecord::Base
     DraftSequence.next!(last_editor_id, topic.draft_key)
   end
 
+
   # Determine what posts are quoted by this post
   def extract_quoted_post_numbers
-    self.quoted_post_numbers = []
+    temp_collector = []
 
     # Create relationships for the quotes
-    raw.scan(/\[quote=\"([^"]+)"\]/).each do |m|
-      if m.present?
-        args = {}
-        m.first.scan(/([a-z]+)\:(\d+)/).each do |arg|
-          args[arg[0].to_sym] = arg[1].to_i
-        end
-
-        if args[:topic].present?
-          # If the topic attribute is present, ensure it's the same topic
-          self.quoted_post_numbers << args[:post] if topic_id == args[:topic]
-        else
-          self.quoted_post_numbers << args[:post]
-        end
-
-      end
+    raw.scan(/\[quote=\"([^"]+)"\]/).each do |quote|
+      args = parse_quote_into_arguments(quote)
+      # If the topic attribute is present, ensure it's the same topic
+      temp_collector << args[:post] unless (args[:topic].present? && topic_id != args[:topic])
     end
 
-    self.quoted_post_numbers.uniq!
-    self.quote_count = quoted_post_numbers.size
+    temp_collector.uniq!
+    self.quoted_post_numbers = temp_collector
+    self.quote_count = temp_collector.size
   end
 
   def save_reply_relationships
@@ -393,11 +461,31 @@ class Post < ActiveRecord::Base
     Jobs.enqueue(:process_post, args)
   end
 
-  def self.public_posts_count_per_day(sinceDaysAgo=30)
-    public_posts.where('posts.created_at > ?', sinceDaysAgo.days.ago).group('date(posts.created_at)').order('date(posts.created_at)').count
+  def self.public_posts_count_per_day(since_days_ago=30)
+    public_posts.where('posts.created_at > ?', since_days_ago.days.ago).group('date(posts.created_at)').order('date(posts.created_at)').count
   end
 
-  def self.private_messages_count_per_day(sinceDaysAgo=30)
-    private_posts.where('posts.created_at > ?', sinceDaysAgo.days.ago).group('date(posts.created_at)').order('date(posts.created_at)').count
+  def self.private_messages_count_per_day(since_days_ago, topic_subtype)
+    private_posts.with_topic_subtype(topic_subtype).where('posts.created_at > ?', since_days_ago.days.ago).group('date(posts.created_at)').order('date(posts.created_at)').count
   end
+
+  private
+
+  def acting_user_is_trusted?
+    acting_user.present? && acting_user.has_trust_level?(:basic)
+  end
+
+  def add_error_if_count_exceeded(key_for_translation, current_count, max_count)
+    errors.add(:base, I18n.t(key_for_translation, count: max_count)) if current_count > max_count
+  end
+
+  def parse_quote_into_arguments(quote)
+    return {} unless quote.present?
+    args = {}
+    quote.first.scan(/([a-z]+)\:(\d+)/).each do |arg|
+      args[arg[0].to_sym] = arg[1].to_i
+    end
+    args
+  end
+
 end

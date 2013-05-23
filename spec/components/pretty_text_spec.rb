@@ -104,6 +104,11 @@ test
   end
 
   describe "Excerpt" do
+
+    it "should have an option to strip links" do
+      PrettyText.excerpt("<a href='http://cnn.com'>cnn</a>",100, strip_links: true).should == "cnn"
+    end
+
     it "should preserve links" do
       PrettyText.excerpt("<a href='http://cnn.com'>cnn</a>",100).should == "<a href='http://cnn.com'>cnn</a>"
     end
@@ -126,6 +131,7 @@ test
 
     it "should truncate stuff properly" do
       PrettyText.excerpt("hello world",5).should == "hello&hellip;"
+      PrettyText.excerpt("<p>hello</p><p>world</p>",6).should == "hello w&hellip;"
     end
 
     it "should insert a space between to Ps" do
@@ -163,6 +169,7 @@ test
     it "should handle nil" do
       PrettyText.excerpt(nil,100).should == ''
     end
+
   end
 
 

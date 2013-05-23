@@ -3,6 +3,11 @@ require_dependency 'post_destroyer'
 
 describe PostAlertObserver do
 
+  before do
+    ActiveRecord::Base.observers.enable :post_alert_observer
+    ImageSorcery.any_instance.stubs(:convert).returns(false)
+  end
+
   let!(:evil_trout) { Fabricate(:evil_trout) }
   let(:post) { Fabricate(:post) }
 
@@ -93,7 +98,6 @@ describe PostAlertObserver do
     let(:user) { Fabricate(:user) }
     let(:mention_post) { Fabricate(:post, user: user, raw: 'Hello @eviltrout')}
     let(:topic) { mention_post.topic }
-    let(:post)
 
     it "won't notify someone who can't see the post" do
       lambda {

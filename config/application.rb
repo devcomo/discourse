@@ -3,7 +3,7 @@ require 'rails/all'
 require 'redis-store' # HACK
 
 # Plugin related stuff
-require './lib/discourse_plugin_registry'
+require_relative '../lib/discourse_plugin_registry'
 
 if defined?(Bundler)
   # If you precompile assets before deploying to production, use this line
@@ -20,8 +20,19 @@ module Discourse
 
     require 'discourse'
 
+    # mocha hates us, active_support/testing/mochaing.rb line 2 is requiring the wrong
+    #  require, patched in source, on upgrade remove this
+    if Rails.env.test? || Rails.env.development?
+      require "mocha/version"
+      require "mocha/deprecation"
+      if Mocha::VERSION == "0.13.3" && Rails::VERSION::STRING == "3.2.12"
+        Mocha::Deprecation.mode = :disabled
+      end
+    end
+
     # Custom directories with classes and modules you want to be autoloadable.
-    config.autoload_paths += %W(#{config.root}/app/serializers)
+    config.autoload_paths += Dir["#{config.root}/app/serializers"]
+    config.autoload_paths += Dir["#{config.root}/lib/validators/"]
 
     # Only load the plugins named here, in the order given (default is alphabetical).
     # :all can be used as a placeholder for all plugins not explicitly named.
@@ -29,13 +40,15 @@ module Discourse
 
     config.assets.paths += %W(#{config.root}/config/locales)
 
-    config.assets.precompile += [
-      'admin.js', 'admin.css', 'shiny/shiny.css', 'preload_store.js',
-      'jquery.js', 'defer/html-sanitizer-bundle.js'
-    ]
+    config.assets.precompile += ['admin.js', 'admin.css', 'shiny/shiny.css', 'preload_store.js', 'jquery.js']
+
+    # Precompile all defer
+    Dir.glob("#{config.root}/app/assets/javascripts/defer/*.js").each do |file|
+      config.assets.precompile << "defer/#{File.basename(file)}"
+    end
 
     # Precompile all available locales
-    Dir.glob("app/assets/javascripts/locales/*.js.erb").each do |file|
+    Dir.glob("#{config.root}/app/assets/javascripts/locales/*.js.erb").each do |file|
       config.assets.precompile << "locales/#{file.match(/([a-z_A-Z]+\.js)\.erb$/)[1]}"
     end
 
@@ -43,7 +56,6 @@ module Discourse
     config.active_record.observers = [
         :user_email_observer,
         :user_action_observer,
-        :message_bus_observer,
         :post_alert_observer,
         :search_observer
     ]

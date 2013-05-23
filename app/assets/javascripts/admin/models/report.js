@@ -16,8 +16,8 @@ Discourse.Report = Discourse.Model.extend({
 
   sumDays: function(startDaysAgo, endDaysAgo) {
     if (this.data) {
-      var earliestDate = Date.create(endDaysAgo + ' days ago', 'en');
-      var latestDate = Date.create(startDaysAgo + ' days ago', 'en');
+      var earliestDate = Date.create(endDaysAgo + ' days ago', 'en').beginningOfDay();
+      var latestDate = Date.create(startDaysAgo + ' days ago', 'en').beginningOfDay();
       var d, sum = 0;
       this.data.each(function(datum){
         d = Date.create(datum.x);
@@ -87,13 +87,58 @@ Discourse.Report = Discourse.Model.extend({
       }
     }
     return 'no-change';
-  }.property('data', 'prev30Days')
+  }.property('data', 'prev30Days'),
+
+  icon: function() {
+    switch( this.get('type') ) {
+    case 'flags':
+      return 'icon-flag';
+    case 'likes':
+      return 'icon-heart';
+    default:
+      return null;
+    }
+  }.property('type'),
+
+  percentChangeString: function(val1, val2) {
+    var val = ((val1 - val2) / val2) * 100;
+    if( isNaN(val) || !isFinite(val) ) {
+      return null;
+    } else if( val > 0 ) {
+      return '+' + val.toFixed(0) + '%';
+    } else {
+      return val.toFixed(0) + '%';
+    }
+  },
+
+  changeTitle: function(val1, val2, prevPeriodString) {
+    var title = '';
+    var percentChange = this.percentChangeString(val1, val2);
+    if( percentChange ) {
+      title += percentChange + ' change. ';
+    }
+    title += 'Was ' + val2 + ' ' + prevPeriodString + '.';
+    return title;
+  },
+
+  yesterdayCountTitle: function() {
+    return this.changeTitle( this.valueAt(1), this.valueAt(2),'two days ago');
+  }.property('data'),
+
+  sevenDayCountTitle: function() {
+    return this.changeTitle( this.sumDays(1,7), this.sumDays(8,14), 'two weeks ago');
+  }.property('data'),
+
+  thirtyDayCountTitle: function() {
+    return this.changeTitle( this.sumDays(1,30), this.get('prev30Days'), 'in the previous 30 day period');
+  }.property('data')
+
 });
 
 Discourse.Report.reopenClass({
   find: function(type) {
     var model = Discourse.Report.create({type: type});
-    Discourse.ajax(Discourse.getURL("/admin/reports/") + type).then(function (json) {
+    Discourse.ajax("/admin/reports/" + type).then(function (json) {
       // Add a percent field to each tuple
       var maxY = 0;
       json.report.data.forEach(function (row) {

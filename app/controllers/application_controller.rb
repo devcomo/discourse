@@ -38,7 +38,6 @@ class ApplicationController < ActionController::Base
 
   # Some exceptions
   class RenderEmpty < Exception; end
-  class NotLoggedIn < Exception; end
 
   # Render nothing unless we are an xhr request
   rescue_from RenderEmpty do
@@ -66,12 +65,18 @@ class ApplicationController < ActionController::Base
   end
 
   rescue_from Discourse::NotFound do
-    if request.format.html?
-      # for now do a simple remap, we may look at cleaner ways of doing the render
-      raise ActiveRecord::RecordNotFound
+
+    if request.format && request.format.json?
+      render status: 404, layout: false, text: "[error: 'not found']"
     else
-      render file: 'public/404', formats: [:html], layout: false, status: 404
+      f = Topic.where(deleted_at: nil, archetype: "regular")
+      @latest = f.order('views desc').take(10)
+      @recent = f.order('created_at desc').take(10)
+      @slug =  params[:slug].class == String ? params[:slug] : ''
+      @slug.gsub!('-',' ')
+      render status: 404, layout: 'no_js', template: '/exceptions/not_found'
     end
+
   end
 
   rescue_from Discourse::InvalidAccess do
@@ -98,7 +103,7 @@ class ApplicationController < ActionController::Base
         guardian.current_user.sync_notification_channel_position
       end
 
-      store_preloaded("site", Site.cached_json)
+      store_preloaded("site", Site.cached_json(current_user))
 
       if current_user.present?
         store_preloaded("currentUser", MultiJson.dump(CurrentUserSerializer.new(current_user, root: false)))
@@ -170,6 +175,19 @@ class ApplicationController < ActionController::Base
     end
   end
 
+
+  def fetch_user_from_params
+    username_lower = params[:username].downcase
+    username_lower.gsub!(/\.json$/, '')
+
+    user = User.where(username_lower: username_lower).first
+    raise Discourse::NotFound.new if user.blank?
+
+    guardian.ensure_can_see!(user)
+    user
+  end
+
+
   private
 
     def render_json_error(obj)
@@ -240,21 +258,13 @@ class ApplicationController < ActionController::Base
     alias :requires_parameter :requires_parameters
 
     def store_incoming_links
-      if request.referer.present?
-       parsed = URI.parse(request.referer)
-        if parsed.host != request.host
-          IncomingLink.create(url: request.url, referer: request.referer[0..999])
-        end
-      end
+      IncomingLink.add(request,current_user) unless request.xhr?
     end
 
     def check_xhr
       unless (controller_name == 'forums' || controller_name == 'user_open_ids')
         # bypass xhr check on PUT / POST / DELETE provided api key is there, otherwise calling api is annoying
-        if !request.get? && request["api_key"]
-          return
-        end
-
+        return if !request.get? && request["api_key"] && SiteSetting.api_key_valid?(request["api_key"])
         raise RenderEmpty.new unless ((request.format && request.format.json?) || request.xhr?)
       end
     end

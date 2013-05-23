@@ -8,10 +8,31 @@
 **/
 Discourse.EditCategoryView = Discourse.ModalBodyView.extend({
   templateName: 'modal/edit_category',
-  appControllerBinding: 'Discourse.appController',
-
-  // black & white only for foreground colors
+  generalSelected:  Ember.computed.equal('selectedTab', 'general'),
+  securitySelected: Ember.computed.equal('selectedTab', 'security'),
+  settingsSelected: Ember.computed.equal('selectedTab', 'settings'),
   foregroundColors: ['FFFFFF', '000000'],
+
+  init: function() {
+    this._super();
+    this.set('selectedTab', 'general');
+  },
+
+  modalClass: function() {
+    return "edit-category-modal " + (this.present('category.description') ? 'full' : 'small');
+  }.property('category.description'),
+
+  selectGeneral: function() {
+    this.set('selectedTab', 'general');
+  },
+
+  selectSecurity: function() {
+    this.set('selectedTab', 'security');
+  },
+
+  selectSettings: function() {
+    this.set('selectedTab', 'settings');
+  },
 
   disabled: function() {
     if (this.get('saving') || this.get('deleting')) return true;
@@ -47,6 +68,7 @@ Discourse.EditCategoryView = Discourse.ModalBodyView.extend({
 
   title: function() {
     if (this.get('category.id')) return Em.String.i18n("category.edit_long");
+    if (this.get('category.is_uncategorized')) return Em.String.i18n("category.edit_uncategorized");
     return Em.String.i18n("category.create");
   }.property('category.id'),
 
@@ -57,6 +79,7 @@ Discourse.EditCategoryView = Discourse.ModalBodyView.extend({
 
   buttonTitle: function() {
     if (this.get('saving')) return Em.String.i18n("saving");
+    if (this.get('category.is_uncategorized')) return Em.String.i18n("save");
     return (this.get('category.id') ? Em.String.i18n("category.save") : Em.String.i18n("category.create"));
   }.property('saving', 'category.id'),
 
@@ -72,12 +95,14 @@ Discourse.EditCategoryView = Discourse.ModalBodyView.extend({
       var categoryView = this;
 
       // We need the topic_count to be correct, so get the most up-to-date info about this category from the server.
-      Discourse.Category.findBySlug( this.get('category.slug') ).then( function(cat) {
+      Discourse.Category.findBySlugOrId( this.get('category.slug') || this.get('category.id') ).then( function(cat) {
         categoryView.set('category', cat);
         Discourse.get('site').updateCategory(cat);
         categoryView.set('id', categoryView.get('category.slug'));
         categoryView.set('loading', false);
       });
+    } else if( this.get('category.is_uncategorized') ) {
+      this.set('category', this.get('category'));
     } else {
       this.set('category', Discourse.Category.create({ color: 'AB9364', text_color: 'FFFFFF', hotness: 5 }));
     }
@@ -89,19 +114,46 @@ Discourse.EditCategoryView = Discourse.ModalBodyView.extend({
     return false;
   },
 
+  addGroup: function(){
+    this.get("category").addGroup(this.get("selectedGroup"));
+  },
+
+  removeGroup: function(group){
+    // OBVIOUS, Ember treats this as Ember.String, we need a real string here
+    group = group + "";
+    this.get("category").removeGroup(group);
+  },
+
   saveCategory: function() {
     var categoryView = this;
     this.set('saving', true);
-    this.get('category').save().then(function(result) {
-      // success
-      $('#discourse-modal').modal('hide');
-      window.location = Discourse.getURL("/category/") + (Discourse.Utilities.categoryUrlId(result.category));
-    }, function(errors) {
-      // errors
-      if(errors.length === 0) errors.push(Em.String.i18n("category.creation_error"));
-      categoryView.displayErrors(errors);
-      categoryView.set('saving', false);
-    });
+    if( this.get('category.is_uncategorized') ) {
+      $.when(
+        Discourse.SiteSetting.update('uncategorized_color', this.get('category.color')),
+        Discourse.SiteSetting.update('uncategorized_text_color', this.get('category.text_color')),
+        Discourse.SiteSetting.update('uncategorized_name', this.get('category.name'))
+      ).then(function() {
+        // success
+        $('#discourse-modal').modal('hide');
+        Discourse.URL.redirectTo("/category/" + categoryView.get('category.name'));
+      }, function(errors) {
+        // errors
+        if(errors.length === 0) errors.push(Em.String.i18n("category.save_error"));
+        categoryView.displayErrors(errors);
+        categoryView.set('saving', false);
+      });
+    } else {
+      this.get('category').save().then(function(result) {
+        // success
+        $('#discourse-modal').modal('hide');
+        Discourse.URL.redirectTo("/category/" + Discourse.Utilities.categoryUrlId(result.category));
+      }, function(errors) {
+        // errors
+        if(errors.length === 0) errors.push(Em.String.i18n("category.creation_error"));
+        categoryView.displayErrors(errors);
+        categoryView.set('saving', false);
+      });
+    }
   },
 
   deleteCategory: function() {
@@ -112,7 +164,7 @@ Discourse.EditCategoryView = Discourse.ModalBodyView.extend({
       if (result) {
         categoryView.get('category').destroy().then(function(){
           // success
-          window.location = Discourse.getURL("/categories");
+          Discourse.URL.redirectTo("/categories");
         }, function(jqXHR){
           // error
           $('#discourse-modal').modal('show');

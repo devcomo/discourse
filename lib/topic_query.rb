@@ -190,6 +190,25 @@ class TopicQuery
     create_list(:new_in_category) {|l| l.where(category_id: category.id).by_newest.first(25)}
   end
 
+  def self.new_filter(list,treat_as_new_topic_start_date)
+    list.where("topics.created_at >= :created_at", created_at: treat_as_new_topic_start_date)
+        .where("tu.last_read_post_number IS NULL")
+        .where("COALESCE(tu.notification_level, :tracking) >= :tracking", tracking: TopicUser.notification_levels[:tracking])
+  end
+
+  def new_results(list_opts={})
+    TopicQuery.new_filter(default_list(list_opts),@user.treat_as_new_topic_start_date)
+  end
+
+  def self.unread_filter(list)
+    list.where("tu.last_read_post_number < topics.highest_post_number")
+        .where("COALESCE(tu.notification_level, :regular) >= :tracking", regular: TopicUser.notification_levels[:regular], tracking: TopicUser.notification_levels[:tracking])
+  end
+
+  def unread_results(list_opts={})
+    TopicQuery.unread_filter(default_list(list_opts))
+  end
+
   protected
 
     def create_list(filter, list_opts={})
@@ -207,13 +226,13 @@ class TopicQuery
       # Start with a list of all topics
       result = Topic
 
-      if @user_id.present?
+      if @user_id
         result = result.joins("LEFT OUTER JOIN topic_users AS tu ON (topics.id = tu.topic_id AND tu.user_id = #{@user_id})")
       end
 
       unless query_opts[:unordered]
         # If we're logged in, we have to pay attention to our pinned settings
-        if @user_id.present?
+        if @user
           result = result.order(TopicQuery.order_nocategory_with_pinned_sql)
         else
           result = result.order(TopicQuery.order_nocategory_basic_bumped)
@@ -227,21 +246,19 @@ class TopicQuery
       result = result.visible if @user.blank? or @user.regular?
       result = result.where('topics.id <> ?', query_opts[:except_topic_id]) if query_opts[:except_topic_id].present?
       result = result.offset(query_opts[:page].to_i * page_size) if query_opts[:page].present?
+
+      unless @user && @user.moderator?
+        category_ids = @user.secure_category_ids if @user
+        if category_ids.present?
+          result = result.where('categories.secure IS NULL OR categories.secure = ? OR categories.id IN (?)', false, category_ids)
+        else
+          result = result.where('categories.secure IS NULL OR categories.secure = ?', false)
+        end
+      end
+
       result
     end
 
-    def new_results(list_opts={})
-      default_list(list_opts)
-        .where("topics.created_at >= :created_at", created_at: @user.treat_as_new_topic_start_date)
-        .where("tu.last_read_post_number IS NULL")
-        .where("COALESCE(tu.notification_level, :tracking) >= :tracking", tracking: TopicUser.notification_levels[:tracking])
-    end
-
-    def unread_results(list_opts={})
-      default_list(list_opts)
-        .where("tu.last_read_post_number < topics.highest_post_number")
-        .where("COALESCE(tu.notification_level, :regular) >= :tracking", regular: TopicUser.notification_levels[:regular], tracking: TopicUser.notification_levels[:tracking])
-    end
 
     def random_suggested_results_for(topic, count, exclude_topic_ids)
       results = default_list(unordered: true, per_page: count)

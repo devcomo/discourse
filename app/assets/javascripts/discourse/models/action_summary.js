@@ -43,7 +43,12 @@ Discourse.ActionSummary = Discourse.Model.extend({
     this.set('acted', true);
     this.set('count', this.get('count') + 1);
     this.set('can_act', false);
-    this.set('can_undo', action !== 'notify_moderators' && action !== 'notify_user');
+    this.set('can_undo', true);
+
+    if(action === 'notify_moderators' || action === 'notify_user') {
+      this.set('can_undo',false);
+      this.set('can_clear_flags',false);
+    }
 
     // Add ourselves to the users who liked it if present
     if (this.present('users')) {
@@ -52,8 +57,8 @@ Discourse.ActionSummary = Discourse.Model.extend({
 
     // Create our post action
     var actionSummary = this;
-    return Discourse.ajax({
-      url: Discourse.getURL("/post_actions"),
+
+    return Discourse.ajax("/post_actions", {
       type: 'POST',
       data: {
         id: this.get('post.id'),
@@ -62,7 +67,8 @@ Discourse.ActionSummary = Discourse.Model.extend({
       }
     }).then(null, function (error) {
       actionSummary.removeAction();
-      return $.parseJSON(error.responseText).errors;
+      var message = $.parseJSON(error.responseText).errors;
+      bootbox.alert(message);
     });
   },
 
@@ -71,8 +77,7 @@ Discourse.ActionSummary = Discourse.Model.extend({
     this.removeAction();
 
     // Remove our post action
-    return Discourse.ajax({
-      url: Discourse.getURL("/post_actions/") + (this.get('post.id')),
+    return Discourse.ajax("/post_actions/" + (this.get('post.id')), {
       type: 'DELETE',
       data: {
         post_action_type_id: this.get('id')
@@ -82,7 +87,7 @@ Discourse.ActionSummary = Discourse.Model.extend({
 
   clearFlags: function() {
     var actionSummary = this;
-    return Discourse.ajax(Discourse.getURL("/post_actions/clear_flags"), {
+    return Discourse.ajax("/post_actions/clear_flags", {
       type: "POST",
       data: {
         post_action_type_id: this.get('id'),
@@ -96,7 +101,7 @@ Discourse.ActionSummary = Discourse.Model.extend({
 
   loadUsers: function() {
     var actionSummary = this;
-    Discourse.ajax(Discourse.getURL("/post_actions/users"), {
+    Discourse.ajax("/post_actions/users", {
       data: {
         id: this.get('post.id'),
         post_action_type_id: this.get('id')

@@ -266,8 +266,8 @@ describe User do
 
   describe "trust levels" do
 
-    # NOTE be sure to use build to avoid db calls 
-    let(:user) { Fabricate.build(:user, trust_level: TrustLevel.levels[:visitor]) }
+    # NOTE be sure to use build to avoid db calls
+    let(:user) { Fabricate.build(:user, trust_level: TrustLevel.levels[:newuser]) }
 
     it "sets to the default trust level setting" do
       SiteSetting.expects(:default_trust_level).returns(TrustLevel.levels[:elder])
@@ -281,7 +281,7 @@ describe User do
       end
 
       it "is true for your basic level" do
-        user.has_trust_level?(:visitor).should be_true
+        user.has_trust_level?(:newuser).should be_true
       end
 
       it "is false for a higher level" do
@@ -290,7 +290,7 @@ describe User do
 
       it "is true if you exceed the level" do
         user.trust_level = TrustLevel.levels[:elder]
-        user.has_trust_level?(:visitor).should be_true
+        user.has_trust_level?(:newuser).should be_true
       end
 
       it "is true for an admin even with a low trust level" do
@@ -311,14 +311,54 @@ describe User do
         user.has_trust_level?(:elder).should be_true
       end
 
-      it "is a moderator if the user is an admin" do
+      it "is staff if the user is an admin" do
         user.admin = true
-        user.moderator?.should be_true
+        user.staff?.should be_true
       end
 
     end
 
 
+  end
+
+  describe 'staff and regular users' do
+    let(:user) { Fabricate.build(:user) }
+
+    describe '#staff?' do
+      subject { user.staff? }
+
+      it { should be_false }
+
+      context 'for a moderator user' do
+        before { user.moderator = true }
+
+        it { should be_true }
+      end
+
+      context 'for an admin user' do
+        before { user.admin = true }
+
+        it { should be_true }
+      end
+    end
+
+    describe '#regular?' do
+      subject { user.regular? }
+
+      it { should be_true }
+
+      context 'for a moderator user' do
+        before { user.moderator = true }
+
+        it { should be_false }
+      end
+
+      context 'for an admin user' do
+        before { user.admin = true }
+
+        it { should be_false }
+      end
+    end
   end
 
   describe 'temporary_key' do
@@ -770,6 +810,31 @@ describe User do
     end
   end
 
+  describe "flag_linked_posts_as_spam" do
+    let(:user) { Fabricate(:user) }
+    let!(:admin) { Fabricate(:admin) }
+    let!(:post) { PostCreator.new(user, title: "this topic contains spam", raw: "this post has a link: http://discourse.org").create }
+    let!(:another_post) { PostCreator.new(user, title: "this topic also contains spam", raw: "this post has a link: http://discourse.org/asdfa").create }
+    let!(:post_without_link) { PostCreator.new(user, title: "this topic shouldn't be spam", raw: "this post has no links in it.").create }
+
+    it "has flagged all the user's posts as spam" do
+      user.flag_linked_posts_as_spam
+
+      post.reload
+      post.spam_count.should == 1
+
+      another_post.reload
+      another_post.spam_count.should == 1
+
+      post_without_link.reload
+      post_without_link.spam_count.should == 0
+
+      # It doesn't raise an exception if called again
+      user.flag_linked_posts_as_spam
+
+    end
+
+  end
 
   describe 'update_time_read!' do
     let(:user) { Fabricate(:user) }

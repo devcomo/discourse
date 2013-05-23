@@ -11,7 +11,7 @@ Discourse.TopicView = Discourse.View.extend(Discourse.Scrolling, {
   templateName: 'topic',
   topicBinding: 'controller.content',
   userFiltersBinding: 'controller.userFilters',
-  classNameBindings: ['controller.multiSelect:multi-select', 'topic.archetype'],
+  classNameBindings: ['controller.multiSelect:multi-select', 'topic.archetype', 'topic.category.secure:secure_category'],
   siteBinding: 'Discourse.site',
   progressPosition: 1,
   menuVisible: true,
@@ -111,6 +111,9 @@ Discourse.TopicView = Discourse.View.extend(Discourse.Scrolling, {
 
     this.set('screenTrack', null);
     this.resetExamineDockCache();
+
+    // this happens after route exit, stuff could have trickled in
+    this.set('controller.controllers.header.showExtraInfo', false)
   },
 
   didInsertElement: function(e) {
@@ -317,7 +320,14 @@ Discourse.TopicView = Discourse.View.extend(Discourse.Scrolling, {
         categoryName: newCategoryName
       });
       // save the modifications
-      topic.save();
+      topic.save().then(function(result){
+        // update the title if it has been changed (cleaned up) server-side
+        var title = result.basic_topic.fancy_title;
+        topic.setProperties({
+          title: title,
+          fancy_title: title
+        });
+      });
       // close editing mode
       this.set('editingTopic', false);
     }

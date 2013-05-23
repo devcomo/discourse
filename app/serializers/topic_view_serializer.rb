@@ -18,7 +18,8 @@ class TopicViewSerializer < ApplicationSerializer
      :moderator_posts_count,
      :has_best_of,
      :archetype,
-     :slug]
+     :slug,
+     :auto_close_at]
   end
 
   def self.guardian_attributes
@@ -50,6 +51,7 @@ class TopicViewSerializer < ApplicationSerializer
   has_one :created_by, serializer: BasicUserSerializer, embed: :objects
   has_one :last_poster, serializer: BasicUserSerializer, embed: :objects
   has_many :allowed_users, serializer: BasicUserSerializer, embed: :objects
+  has_many :allowed_groups, serializer: BasicGroupSerializer, embed: :objects
 
   has_many :links, serializer: TopicLinkSerializer, embed: :objects
   has_many :participants, serializer: TopicPostCountSerializer, embed: :objects
@@ -126,6 +128,7 @@ class TopicViewSerializer < ApplicationSerializer
   def categoryName
     object.topic.category.name
   end
+
   def include_categoryName?
     object.topic.category.present?
   end
@@ -172,6 +175,10 @@ class TopicViewSerializer < ApplicationSerializer
     object.topic.allowed_users
   end
 
+  def allowed_groups
+    object.topic.allowed_groups
+  end
+
   def include_links?
     object.links.present?
   end
@@ -210,21 +217,23 @@ class TopicViewSerializer < ApplicationSerializer
     @highest_number_in_posts = 0
     if object.posts.present?
       object.posts.each_with_index do |p, idx|
-        @highest_number_in_posts = p.post_number if p.post_number > @highest_number_in_posts
-        ps = PostSerializer.new(p, scope: scope, root: false)
-        ps.topic_slug = object.topic.slug
-        ps.topic_view = object
-        p.topic = object.topic
+        if p.user
+          @highest_number_in_posts = p.post_number if p.post_number > @highest_number_in_posts
+          ps = PostSerializer.new(p, scope: scope, root: false)
+          ps.topic_slug = object.topic.slug
+          ps.topic_view = object
+          p.topic = object.topic
 
-        post_json = ps.as_json
+          post_json = ps.as_json
 
-        if object.index_reverse
-          post_json[:index] = object.index_offset - idx
-        else
-          post_json[:index] = object.index_offset + idx + 1
+          if object.index_reverse
+            post_json[:index] = object.index_offset - idx
+          else
+            post_json[:index] = object.index_offset + idx + 1
+          end
+
+          @posts << post_json
         end
-
-        @posts << post_json
       end
     end
     @posts

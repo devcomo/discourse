@@ -11,14 +11,14 @@ Discourse.PostView = Discourse.View.extend({
   templateName: 'post',
   classNameBindings: ['post.lastPost',
                       'postTypeClass',
-                      'post.selected',
+                      'selected',
                       'post.hidden:hidden',
                       'post.deleted_at:deleted',
                       'parentPost:replies-above'],
   postBinding: 'content',
 
   // TODO really we should do something cleaner here... this makes it work in debug but feels really messy
-  screenTrack: (function() {
+  screenTrack: function() {
     var parentView = this.get('parentView');
     var screenTrack = null;
     while (parentView && !screenTrack) {
@@ -26,51 +26,44 @@ Discourse.PostView = Discourse.View.extend({
       parentView = parentView.get('parentView');
     }
     return screenTrack;
-  }).property('parentView'),
+  }.property('parentView'),
 
-  postTypeClass: (function() {
+  postTypeClass: function() {
     return this.get('post.post_type') === Discourse.get('site.post_types.moderator_action') ? 'moderator' : 'regular';
-  }).property('post.post_type'),
+  }.property('post.post_type'),
 
   // If the cooked content changed, add the quote controls
-  cookedChanged: (function() {
+  cookedChanged: function() {
     var postView = this;
-    Em.run.next(function() { postView.insertQuoteControls(); });
-  }).observes('post.cooked'),
+    Em.run.schedule('afterRender', function() {
+      postView.insertQuoteControls();
+    });
+  }.observes('post.cooked'),
 
   init: function() {
     this._super();
     this.set('context', this.get('content'));
   },
 
-  mouseDown: function(e) {
-    this.set('isMouseDown', true);
-  },
-
   mouseUp: function(e) {
     if (this.get('controller.multiSelect') && (e.metaKey || e.ctrlKey)) {
-      this.toggleProperty('post.selected');
+      this.get('controller').selectPost(this.get('post'));
     }
-
-    if (!Discourse.get('currentUser.enable_quoting')) return;
-    if ($(e.target).closest('.topic-body').length === 0) return;
-
-    var qbc = this.get('controller.controllers.quoteButton');
-    if (qbc) {
-      e.context = this.get('post');
-      qbc.selectText(e);
-    }
-
-    this.set('isMouseDown', false);
   },
 
-  selectText: (function() {
-    return this.get('post.selected') ? Em.String.i18n('topic.multi_select.selected', { count: this.get('controller.selectedCount') }) : Em.String.i18n('topic.multi_select.select');
-  }).property('post.selected', 'controller.selectedCount'),
+  selected: function() {
+    var selectedPosts = this.get('controller.selectedPosts');
+    if (!selectedPosts) return false;
+    return selectedPosts.contains(this.get('post'));
+  }.property('controller.selectedPostsCount'),
 
-  repliesHidden: (function() {
+  selectText: function() {
+    return this.get('selected') ? Em.String.i18n('topic.multi_select.selected', { count: this.get('controller.selectedPostsCount') }) : Em.String.i18n('topic.multi_select.select');
+  }.property('selected', 'controller.selectedPostsCount'),
+
+  repliesHidden: function() {
     return !this.get('repliesShown');
-  }).property('repliesShown'),
+  }.property('repliesShown'),
 
   // Click on the replies button
   showReplies: function() {
@@ -141,7 +134,7 @@ Discourse.PostView = Discourse.View.extend({
     // Only add the expand/contract control if it's not a full post
     var expandContract = "";
     if (!$aside.data('full')) {
-      expandContract = "<i class='icon-" + desc + "' title='expand/collapse'></i>";
+      expandContract = "<i class='icon-" + desc + "' title='" + Em.String.i18n("post.expand_collapse") + "'></i>";
       $aside.css('cursor', 'pointer');
     }
     $('.quote-controls', $aside).html("" + expandContract + navLink);
@@ -161,7 +154,7 @@ Discourse.PostView = Discourse.View.extend({
       if ($aside.data('topic')) {
         topic_id = $aside.data('topic');
       }
-      Discourse.ajax(Discourse.getURL("/posts/by_number/") + topic_id + "/" + ($aside.data('post'))).then(function (result) {
+      Discourse.ajax("/posts/by_number/" + topic_id + "/" + ($aside.data('post'))).then(function (result) {
         var parsed = $(result.cooked);
         parsed.replaceText(originalText, "<span class='highlighted'>" + originalText + "</span>");
         $blockQuote.showHtml(parsed);
@@ -186,7 +179,13 @@ Discourse.PostView = Discourse.View.extend({
           postView.$(".cooked a[href]").each(function() {
             var link = $(this);
             if (link.attr('href') === lc.url) {
-              return link.append("<span class='badge badge-notification clicks' title='clicks'>" + lc.clicks + "</span>");
+              // don't display badge counts on category badge
+              if (link.closest('.badge-category').length === 0) {
+                // nor in oneboxes (except when we force it)
+                if (link.closest(".onebox-result").length === 0 || link.hasClass("track-link")) {
+                  link.append("<span class='badge badge-notification clicks' title='" + Em.String.i18n("topic_summary.clicks") + "'>" + lc.clicks + "</span>");
+                }
+              }
             }
           });
         }
@@ -259,30 +258,5 @@ Discourse.PostView = Discourse.View.extend({
     if (controller && controller.postRendered) {
       controller.postRendered(post);
     }
-
-    // make the selection work under iOS
-    // "selectionchange" event is only supported in IE, Safari & Chrome
-    var postView = this;
-    $(document).on('selectionchange', function(e) {
-      // quoting as been disabled by the user
-      if (!Discourse.get('currentUser.enable_quoting')) return;
-      // there is no need to handle this event when the mouse is down
-      if (postView.get('isMouseDown')) return;
-      // find out whether we currently are selecting inside a post
-      var closestPosts = $(window.getSelection().anchorNode).closest('.topic-post');
-      if (closestPosts.length === 0) return;
-      // this event is bound for every posts in the topic, but is triggered on "document"
-      // we should therefore filter the event to only the right post
-      if (closestPosts[0].id !== postView.elementId) return;
-      var qbc = postView.get('controller.controllers.quoteButton');
-      if (qbc) {
-        e.context = postView.get('post');
-        qbc.selectText(e);
-      }
-    });
-  },
-
-  willDestroyElement: function() {
-    $(document).off('selectionchange');
   }
 });

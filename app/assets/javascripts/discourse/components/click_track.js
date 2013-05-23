@@ -22,10 +22,6 @@ Discourse.ClickTrack = {
     // We don't track clicks on quote back buttons
     if ($link.hasClass('back') || $link.hasClass('quote-other-topic')) return true;
 
-    // We don't track clicks in oneboxes
-    // except when we force it with the "track-link" class
-    if ($link.closest('.onebox-result') && !$link.hasClass('track-link')) return true;
-
     // Remove the href, put it as a data attribute
     if (!$link.data('href')) {
       $link.addClass('no-href');
@@ -57,7 +53,13 @@ Discourse.ClickTrack = {
     if (!ownLink) {
       var $badge = $('span.badge', $link);
       if ($badge.length === 1) {
-        $badge.html(parseInt($badge.html(), 10) + 1);
+        // don't update counts in category badge
+        if ($link.closest('.badge-category').length === 0) {
+          // nor in oneboxes (except when we force it)
+          if ($link.closest(".onebox-result").length === 0 || $link.hasClass("track-link")) {
+            $badge.html(parseInt($badge.html(), 10) + 1);
+          }
+        }
       }
     }
 
@@ -69,8 +71,8 @@ Discourse.ClickTrack = {
     }
 
     // if they want to open in a new tab, do an AJAX request
-    if (e.metaKey || e.ctrlKey || e.which === 2) {
-      Discourse.ajax(Discourse.getURL("/clicks/track"), {
+    if (e.shiftKey || e.metaKey || e.ctrlKey || e.which === 2) {
+      Discourse.ajax("/clicks/track", {
         data: {
           url: href,
           post_id: postId,
@@ -83,8 +85,8 @@ Discourse.ClickTrack = {
     }
 
     // If we're on the same site, use the router and track via AJAX
-    if (href.indexOf(window.location.origin) === 0) {
-      Discourse.ajax(Discourse.getURL("/clicks/track"), {
+    if (href.indexOf(Discourse.URL.origin()) === 0) {
+      Discourse.ajax("/clicks/track", {
         data: {
           url: href,
           post_id: postId,
@@ -101,7 +103,7 @@ Discourse.ClickTrack = {
       var win = window.open(trackingUrl, '_blank');
       win.focus();
     } else {
-      window.location = trackingUrl;
+      Discourse.URL.redirectTo(trackingUrl);
     }
 
     return false;

@@ -20,7 +20,11 @@ dump.rdb
 /cache
 /coverage/*
 
+/public/assets/*
+
 config/database.yml
+config/redis.yml
+config/discourse.pill
 
 # Ignore the default SQLite database and db dumps
 /db/*.sqlite3
@@ -59,6 +63,8 @@ config/fog_credentials.yml
 
 /public/uploads
 /public/stylesheet-cache/*
+/public/downloads
+/public/images
 
 # Scripts used for downloading/refreshing db
 script/download_db
@@ -75,6 +81,8 @@ chef/tmp/*
 
 # exclude our git version file for now
 config/version.rb
-
-# ignore the Ruby Version manager (rvm) file
+# ignore the Ruby Version manager (rvm)
 .rvmrc
+.ruby-version
+.ruby-gemset
+.rbenv
