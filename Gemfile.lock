@@ -324,6 +324,8 @@ GEM
       slop (~> 3.4)
     pry-rails (0.3.0)
       pry (>= 0.9.10)
+    puma (2.0.1)
+      rack (>= 1.1, < 2.0)
     rack (1.4.5)
     rack-cache (1.2)
       rack (>= 0.4)
@@ -530,6 +532,7 @@ DEPENDENCIES
   openid-redis-store
   pg
   pry-rails
+  puma
   rack-cache
   rack-cors
   rack-mini-profiler
@@ -559,7 +562,6 @@ DEPENDENCIES
   sprockets!
   terminal-notifier-guard
   therubyracer
-  thin
   timecop
   turbo-sprockets-rails3
   uglifier

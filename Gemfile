@@ -63,7 +63,7 @@ gem 'sidekiq'
 gem 'sinatra', require: nil
 gem 'slim'  # required for sidekiq-web
 gem 'therubyracer', require: 'v8'
-gem 'thin'
+gem 'puma'
 gem 'diffy', require: false
 
 # Heroku stuff
