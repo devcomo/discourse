@@ -12,9 +12,13 @@ Discourse.AdminSiteContentsRoute = Discourse.Route.extend({
     return Discourse.SiteContentType.findAll();
   },
 
-  renderTemplate: function() {
+  renderTemplate: function(controller, model) {
     this.render('admin/templates/site_contents', {into: 'admin/templates/admin'});
     this.render('admin/templates/site_contents_empty', {into: 'admin/templates/site_contents'});
+  },
+
+  setupController: function(controller, model) {
+    controller.set('model', model);
   }
 });
 

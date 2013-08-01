@@ -2,7 +2,10 @@ class SiteSerializer < ApplicationSerializer
 
   attributes :default_archetype,
              :notification_types,
-             :post_types
+             :post_types,
+             :uncategorized_slug,
+             :group_names
+
 
   has_many :categories, serializer: BasicCategorySerializer, embed: :objects
   has_many :post_action_types, embed: :objects
@@ -16,6 +19,10 @@ class SiteSerializer < ApplicationSerializer
 
   def post_types
     Post.types
+  end
+
+  def uncategorized_slug
+    Slug.for(SiteSetting.uncategorized_name)
   end
 
 end

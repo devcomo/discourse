@@ -8,32 +8,34 @@
 **/
 Discourse.NavItemView = Discourse.View.extend({
   tagName: 'li',
-  classNameBindings: ['isActive', 'content.hasIcon:has-icon'],
+  classNameBindings: ['active', 'content.hasIcon:has-icon'],
   attributeBindings: ['title'],
 
-  title: (function() {
+  hidden: Em.computed.not('content.visible'),
+  count: Ember.computed.alias('content.count'),
+  shouldRerender: Discourse.View.renderIfChanged('count'),
+  active: Discourse.computed.propertyEqual('contentNameSlug', 'controller.filterMode'),
+
+  title: function() {
     var categoryName, extra, name;
     name = this.get('content.name');
     categoryName = this.get('content.categoryName');
     if (categoryName) {
-      extra = {
-        categoryName: categoryName
-      };
+      extra = { categoryName: categoryName };
       name = "category";
     }
-    return Ember.String.i18n("filters." + name + ".help", extra);
-  }).property("content.filter"),
+    return I18n.t("filters." + name + ".help", extra);
+  }.property("content.filter"),
 
-  isActive: (function() {
-    if (this.get("content.name").replace(' ','-') === this.get("controller.filterMode")) return "active";
-    return "";
-  }).property("content.name", "controller.filterMode"),
+  contentNameSlug: function() {
+    return this.get("content.name").toLowerCase().replace(' ','-');
+  }.property('content.name'),
 
-  hidden: (function() {
-    return !this.get('content.visible');
-  }).property('content.visible'),
+  // active: function() {
+  //   return (this.get("contentNameSlug") === this.get("controller.filterMode"));
+  // }.property("contentNameSlug", "controller.filterMode"),
 
-  name: (function() {
+  name: function() {
     var categoryName, extra, name;
     name = this.get('content.name');
     categoryName = this.get('content.categoryName');
@@ -42,20 +44,19 @@ Discourse.NavItemView = Discourse.View.extend({
     };
     if (categoryName) {
       name = 'category';
-      extra.categoryName = categoryName.titleize();
+      extra.categoryName = Discourse.Formatter.toTitleCase(categoryName);
     }
-    return I18n.t("js.filters." + name + ".title", extra);
-  }).property('count'),
+    return I18n.t("filters." + name + ".title", extra);
+  }.property('count'),
 
   render: function(buffer) {
-    var content;
-    content = this.get('content');
-    buffer.push("<a href='" + (content.get('href')) + "'>");
+    var content = this.get('content');
+    buffer.push("<a href='" + content.get('href') + "'>");
     if (content.get('hasIcon')) {
-      buffer.push("<span class='" + (content.get('name')) + "'></span>");
+      buffer.push("<span class='" + content.get('name') + "'></span>");
     }
     buffer.push(this.get('name'));
-    return buffer.push("</a>");
+    buffer.push("</a>");
   }
 
 });

@@ -14,14 +14,26 @@ class ApplicationController < ActionController::Base
 
   protect_from_forgery
 
+  # Default Rails 3.2 lets the request through with a blank session
+  #  we are being more pedantic here and nulling session / current_user
+  #  and then raising a CSRF exception
+  def handle_unverified_request
+    # NOTE: API key is secret, having it invalidates the need for a CSRF token
+    unless is_api?
+      super
+      clear_current_user
+      raise Discourse::CSRF
+    end
+  end
+
   before_filter :inject_preview_style
   before_filter :block_if_maintenance_mode
-  before_filter :check_restricted_access
   before_filter :authorize_mini_profiler
   before_filter :store_incoming_links
   before_filter :preload_json
   before_filter :check_xhr
   before_filter :set_locale
+  before_filter :redirect_to_login_if_required
 
   rescue_from Exception do |exception|
     unless [ ActiveRecord::RecordNotFound, ActionController::RoutingError,
@@ -61,28 +73,24 @@ class ApplicationController < ActionController::Base
 
   rescue_from Discourse::NotLoggedIn do |e|
     raise e if Rails.env.test?
-    redirect_to root_path
+    redirect_to "/"
   end
 
   rescue_from Discourse::NotFound do
-
-    if request.format && request.format.json?
-      render status: 404, layout: false, text: "[error: 'not found']"
-    else
-      f = Topic.where(deleted_at: nil, archetype: "regular")
-      @latest = f.order('views desc').take(10)
-      @recent = f.order('created_at desc').take(10)
-      @slug =  params[:slug].class == String ? params[:slug] : ''
-      @slug.gsub!('-',' ')
-      render status: 404, layout: 'no_js', template: '/exceptions/not_found'
-    end
-
+    rescue_discourse_actions("[error: 'not found']", 404)
   end
 
   rescue_from Discourse::InvalidAccess do
-    render file: 'public/403', formats: [:html], layout: false, status: 403
+    rescue_discourse_actions("[error: 'invalid access']", 403)
   end
 
+  def rescue_discourse_actions(message, error)
+    if request.format && request.format.json?
+      render status: error, layout: false, text: (error == 404) ? build_not_found_page(error) : message
+    else
+      render text: build_not_found_page(error, 'no_js')
+    end
+  end
 
   def set_locale
     I18n.locale = SiteSetting.default_locale
@@ -98,18 +106,23 @@ class ApplicationController < ActionController::Base
 
   # If we are rendering HTML, preload the session data
   def preload_json
-    if request.format && request.format.html?
-      if guardian.current_user
-        guardian.current_user.sync_notification_channel_position
-      end
 
-      store_preloaded("site", Site.cached_json(current_user))
+    # We don't preload JSON on xhr or JSON request
+    return if request.xhr?
 
-      if current_user.present?
-        store_preloaded("currentUser", MultiJson.dump(CurrentUserSerializer.new(current_user, root: false)))
-      end
-      store_preloaded("siteSettings", SiteSetting.client_settings_json)
+    if guardian.current_user
+      guardian.current_user.sync_notification_channel_position
     end
+
+    store_preloaded("site", Site.cached_json(guardian))
+
+    if current_user.present?
+      store_preloaded("currentUser", MultiJson.dump(CurrentUserSerializer.new(current_user, root: false)))
+
+      serializer = ActiveModel::ArraySerializer.new(TopicTrackingState.report([current_user.id]), each_serializer: TopicTrackingStateSerializer)
+      store_preloaded("topicTrackingStates", MultiJson.dump(serializer))
+    end
+    store_preloaded("siteSettings", SiteSetting.client_settings_json)
   end
 
 
@@ -122,21 +135,23 @@ class ApplicationController < ActionController::Base
     @guardian ||= Guardian.new(current_user)
   end
 
+  def serialize_data(obj, serializer, opts={})
+    # If it's an array, apply the serializer as an each_serializer to the elements
+    serializer_opts = {scope: guardian}.merge!(opts)
+    if obj.is_a?(Array)
+      serializer_opts[:each_serializer] = serializer
+      ActiveModel::ArraySerializer.new(obj, serializer_opts).as_json
+    else
+      serializer.new(obj, serializer_opts).as_json
+    end
+  end
+
   # This is odd, but it seems that in Rails `render json: obj` is about
   # 20% slower than calling MultiJSON.dump ourselves. I'm not sure why
   # Rails doesn't call MultiJson.dump when you pass it json: obj but
   # it seems we don't need whatever Rails is doing.
   def render_serialized(obj, serializer, opts={})
-
-    # If it's an array, apply the serializer as an each_serializer to the elements
-    serializer_opts = {scope: guardian}.merge!(opts)
-    if obj.is_a?(Array)
-      serializer_opts[:each_serializer] = serializer
-      render_json_dump(ActiveModel::ArraySerializer.new(obj, serializer_opts).as_json)
-    else
-      render_json_dump(serializer.new(obj, serializer_opts).as_json)
-    end
-
+    render_json_dump(serialize_data(obj, serializer, opts))
   end
 
   def render_json_dump(obj)
@@ -149,9 +164,6 @@ class ApplicationController < ActionController::Base
 
     # Don't cache logged in users
     return false if current_user.present?
-
-    # Don't cache if there's restricted access
-    return false if SiteSetting.access_password.present?
 
     true
   end
@@ -186,7 +198,6 @@ class ApplicationController < ActionController::Base
     guardian.ensure_can_see!(user)
     user
   end
-
 
   private
 
@@ -232,14 +243,6 @@ class ApplicationController < ActionController::Base
       end
     end
 
-    def check_restricted_access
-      # note current_user is defined in the CurrentUser mixin
-      if SiteSetting.access_password.present? && cookies[:_access] != SiteSetting.access_password
-        redirect_to request_access_path(return_path: request.fullpath)
-        return false
-      end
-    end
-
     def mini_profiler_enabled?
       defined?(Rack::MiniProfiler) && current_user.try(:admin?)
     end
@@ -249,14 +252,6 @@ class ApplicationController < ActionController::Base
       Rack::MiniProfiler.authorize_request
     end
 
-    def requires_parameters(*required)
-      required.each do |p|
-        raise Discourse::InvalidParameters.new(p) unless params.has_key?(p)
-      end
-    end
-
-    alias :requires_parameter :requires_parameters
-
     def store_incoming_links
       IncomingLink.add(request,current_user) unless request.xhr?
     end
@@ -264,13 +259,40 @@ class ApplicationController < ActionController::Base
     def check_xhr
       unless (controller_name == 'forums' || controller_name == 'user_open_ids')
         # bypass xhr check on PUT / POST / DELETE provided api key is there, otherwise calling api is annoying
-        return if !request.get? && request["api_key"] && SiteSetting.api_key_valid?(request["api_key"])
+        return if !request.get? && api_key_valid?
         raise RenderEmpty.new unless ((request.format && request.format.json?) || request.xhr?)
       end
     end
 
     def ensure_logged_in
       raise Discourse::NotLoggedIn.new unless current_user.present?
+    end
+
+    def redirect_to_login_if_required
+      redirect_to :login if SiteSetting.login_required? && !current_user
+    end
+
+    def build_not_found_page(status=404, layout=false)
+      @top_viewed = TopicQuery.top_viewed(10)
+      @recent = TopicQuery.recent(10)
+      @slug =  params[:slug].class == String ? params[:slug] : ''
+      @slug =  (params[:id].class == String ? params[:id] : '') if @slug.blank?
+      @slug.gsub!('-',' ')
+      render_to_string status: status, layout: layout, formats: [:html], template: '/exceptions/not_found'
+    end
+
+  protected
+
+    def api_key_valid?
+      request["api_key"] && SiteSetting.api_key_valid?(request["api_key"])
+    end
+
+    # returns an array of integers given a param key
+    # returns nil if key is not found
+    def param_to_integer_list(key, delimiter = ',')
+      if params[key]
+        params[key].split(delimiter).map(&:to_i)
+      end
     end
 
 end

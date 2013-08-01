@@ -1,10 +1,10 @@
 require_dependency 'discourse_hub'
+require_dependency 'user_name_suggester'
 
 class UsersController < ApplicationController
 
   skip_before_filter :check_xhr, only: [:show, :password_reset, :update, :activate_account, :avatar, :authorize_email, :user_preferences_redirect]
   skip_before_filter :authorize_mini_profiler, only: [:avatar]
-  skip_before_filter :check_restricted_access, only: [:avatar]
 
   before_filter :ensure_logged_in, only: [:username, :update, :change_email, :user_preferences_redirect]
 
@@ -12,6 +12,13 @@ class UsersController < ApplicationController
   #  page is going to be empty, this means that server will see an invalid CSRF and blow the session
   #  once that happens you can't log in with social
   skip_before_filter :verify_authenticity_token, only: [:create]
+  skip_before_filter :redirect_to_login_if_required, only: [:check_username,
+                                                            :create,
+                                                            :get_honeypot_value,
+                                                            :activate_account,
+                                                            :send_activation_email,
+                                                            :authorize_email,
+                                                            :password_reset]
 
   def show
     @user = fetch_user_from_params
@@ -47,9 +54,10 @@ class UsersController < ApplicationController
       u.digest_after_days = params[:digest_after_days] || u.digest_after_days
       u.auto_track_topics_after_msecs = params[:auto_track_topics_after_msecs].to_i if params[:auto_track_topics_after_msecs]
       u.new_topic_duration_minutes = params[:new_topic_duration_minutes].to_i if params[:new_topic_duration_minutes]
+      u.title = params[:title] || u.title if guardian.can_grant_title?(u)
 
       [:email_digests, :email_direct, :email_private_messages,
-       :external_links_in_new_tab, :enable_quoting].each do |i|
+       :external_links_in_new_tab, :enable_quoting, :dynamic_favicon].each do |i|
         if params[i].present?
           u.send("#{i.to_s}=", params[i] == 'true')
         end
@@ -64,7 +72,7 @@ class UsersController < ApplicationController
   end
 
   def username
-    requires_parameter(:new_username)
+    params.require(:new_username)
 
     user = fetch_user_from_params
     guardian.ensure_can_edit!(user)
@@ -85,14 +93,19 @@ class UsersController < ApplicationController
   end
 
   def is_local_username
-    requires_parameter(:username)
+    params.require(:username)
     u = params[:username].downcase
     r = User.exec_sql('select 1 from users where username_lower = ?', u).values
     render json: {valid: r.length == 1}
   end
 
   def check_username
-    requires_parameter(:username)
+    params.require(:username)
+
+    target_user = params[:for_user_id] ? User.find(params[:for_user_id]) : current_user
+
+    # The special case where someone is changing the case of their own username
+    return render(json: {available: true}) if target_user and params[:username].downcase == target_user.username.downcase
 
     validator = UsernameValidator.new(params[:username])
     if !validator.valid_format?
@@ -101,17 +114,17 @@ class UsersController < ApplicationController
       if User.username_available?(params[:username])
         render json: {available: true}
       else
-        render json: {available: false, suggestion: User.suggest_username(params[:username])}
+        render json: {available: false, suggestion: UserNameSuggester.suggest(params[:username])}
       end
     else
 
       # Contact the Discourse Hub server
-      email_given = (params[:email].present? || current_user.present?)
+      email_given = (params[:email].present? || target_user.present?)
       available_locally = User.username_available?(params[:username])
       global_match = false
       available_globally, suggestion_from_discourse_hub = begin
         if email_given
-          global_match, available, suggestion = DiscourseHub.nickname_match?( params[:username], params[:email] || current_user.email )
+          global_match, available, suggestion = DiscourseHub.nickname_match?( params[:username], params[:email] || target_user.email )
           [available || global_match, suggestion]
         else
           DiscourseHub.nickname_available?(params[:username])
@@ -132,7 +145,7 @@ class UsersController < ApplicationController
         end
       elsif available_globally && !available_locally
         # Already registered on this site with the matching nickname and email address. Why are you signing up again?
-        render json: {available: false, suggestion: User.suggest_username(params[:username])}
+        render json: {available: false, suggestion: UserNameSuggester.suggest(params[:username])}
       else
         # Not available anywhere.
         render json: {available: false, suggestion: suggestion_from_discourse_hub}
@@ -144,16 +157,7 @@ class UsersController < ApplicationController
   end
 
   def create
-
-    if honeypot_or_challenge_fails?(params)
-      # Don't give any indication that we caught you in the honeypot
-      honey_pot_response = {
-        success: true,
-        active: false,
-        message: I18n.t("login.activate_email", email: params[:email])
-      }
-      return render(json: honey_pot_response)
-    end
+    return fake_success_response if suspicious? params
 
     user = User.new_from_params(params)
 
@@ -168,39 +172,33 @@ class UsersController < ApplicationController
     end
 
     if user.save
-      msg = nil
-      active_user = user.active?
-
-      if active_user
-        # If the user is active (remote authorized email)
-        if SiteSetting.must_approve_users?
-          msg = I18n.t("login.wait_approval")
-          active_user = false
-        else
-          log_on_user(user)
-          user.enqueue_welcome_message('welcome_user')
-          msg = I18n.t("login.active")
-        end
-      else
-        msg = I18n.t("login.activate_email", email: user.email)
-        Jobs.enqueue(
-          :user_email, type: :signup, user_id: user.id,
+      if SiteSetting.must_approve_users?
+        message = I18n.t("login.wait_approval")
+      elsif !user.active?
+        message = I18n.t("login.activate_email", email: user.email)
+        Jobs.enqueue(:user_email,
+          type: :signup,
+          user_id: user.id,
           email_token: user.email_tokens.first.token
         )
+      else
+        message = I18n.t("login.active")
+        log_on_user(user)
+        user.enqueue_welcome_message('welcome_user')
       end
 
-      # Create 3rd party auth records (Twitter, Facebook, GitHub)
       create_third_party_auth_records(user, auth) if auth.present?
 
       # Clear authentication session.
       session[:authentication] = nil
 
-      # JSON result
-      render json: { success: true, active: active_user, message: msg }
+      render json: { success: true, active: user.active?, message: message }
     else
       render json: {
         success: false,
-        message: I18n.t("login.errors", errors: user.errors.full_messages.join("\n"))
+        message: I18n.t("login.errors", errors: user.errors.full_messages.join("\n")),
+        errors: user.errors.to_hash,
+        values: user.attributes.slice("name", "username", "email")
       }
     end
   rescue ActiveRecord::StatementInvalid
@@ -210,7 +208,7 @@ class UsersController < ApplicationController
       message: I18n.t(
         "login.errors",
         errors:I18n.t(
-          "login.not_available", suggestion: User.suggest_username(params[:username])
+          "login.not_available", suggestion: UserNameSuggester.suggest(params[:username])
         )
       )
     }
@@ -267,7 +265,7 @@ class UsersController < ApplicationController
   end
 
   def change_email
-    requires_parameter(:email)
+    params.require(:email)
     user = fetch_user_from_params
     guardian.ensure_can_edit!(user)
     lower_email = Email.downcase(params[:email]).strip
@@ -321,7 +319,7 @@ class UsersController < ApplicationController
     @user = fetch_user_from_params
     @email_token = @user.email_tokens.unconfirmed.active.first
     if @user
-      @email_token = @user.email_tokens.create(email: @user.email) if @email_token.nil?
+      @email_token ||= @user.email_tokens.create(email: @user.email)
       Jobs.enqueue(:user_email, type: :signup, user_id: @user.id, email_token: @email_token.token)
     end
     render nothing: true
@@ -346,6 +344,20 @@ class UsersController < ApplicationController
 
     def challenge_value
       '3019774c067cc2b'
+    end
+
+    def suspicious?(params)
+      honeypot_or_challenge_fails?(params) || SiteSetting.invite_only?
+    end
+
+    def fake_success_response
+      render(
+        json: {
+          success: true,
+          active: false,
+          message: I18n.t("login.activate_email", email: params[:email])
+        }
+      )
     end
 
     def honeypot_or_challenge_fails?(params)

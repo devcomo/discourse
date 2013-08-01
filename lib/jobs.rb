@@ -18,6 +18,14 @@ module Jobs
   class Base
     include Sidekiq::Worker
 
+    def log(*args)
+      puts args
+      args.each do |arg|
+        Rails.logger.info "#{Time.now.to_formatted_s(:db)}: [#{self.class.name.upcase}] #{arg}"
+      end
+      true
+    end
+
     def self.delayed_perform(opts={})
       self.new.perform(opts)
     end
@@ -113,10 +121,11 @@ module Jobs
     Sidekiq::ScheduledSet.new.select do |scheduled_job|
       if scheduled_job.klass == 'Sidekiq::Extensions::DelayedClass'
         job_args = YAML.load(scheduled_job.args[0])
-        if job_args[0].to_s == job_class and job_args[2] and job_args[2][0]
+        job_args_class, _, (job_args_params, *) = job_args
+        if job_args_class.to_s == job_class && job_args_params
           matched = true
           params.each do |key, value|
-            unless job_args[2][0][key] == value
+            unless job_args_params[key] == value
               matched = false
               break
             end

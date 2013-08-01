@@ -1,14 +1,16 @@
 class SessionController < ApplicationController
-  
-  # we need to allow account login with bad CSRF tokens, if people are caching, the CSRF token on the 
-  #  page is going to be empty, this means that server will see an invalid CSRF and blow the session
-  #  once that happens you can't log in with social
-  skip_before_filter :verify_authenticity_token, only: [:create]
+
+  skip_before_filter :redirect_to_login_if_required
+
+  def csrf
+    render json: {csrf: form_authenticity_token }
+  end
 
   def create
-    requires_parameter(:login, :password)
+    params.require(:login)
+    params.require(:password)
 
-    login = params[:login]
+    login = params[:login].strip
     login = login[1..-1] if login[0] == "@"
 
     if login =~ /@/
@@ -27,6 +29,12 @@ class SessionController < ApplicationController
 
       # If their password is correct
       if @user.confirm_password?(params[:password])
+
+        if @user.is_banned?
+          render json: { error: I18n.t("login.banned", {date: I18n.l(@user.banned_till, format: :date_only)}) }
+          return
+        end
+
         if @user.email_confirmed?
           log_on_user(@user)
           render_serialized(@user, UserSerializer)
@@ -47,7 +55,7 @@ class SessionController < ApplicationController
   end
 
   def forgot_password
-    requires_parameter(:login)
+    params.require(:login)
 
     user = User.where('username_lower = :username or email = :email', username: params[:login].downcase, email: Email.downcase(params[:login])).first
     if user.present?

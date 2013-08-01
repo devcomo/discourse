@@ -10,9 +10,17 @@ Discourse.EmbeddedPostView = Discourse.View.extend({
   templateName: 'embedded_post',
   classNames: ['reply'],
 
+  init: function() {
+    this._super();
+    this.set('context', this.get('content'));
+  },
+
   didInsertElement: function() {
-    var postView = this.get('postView') || this.get('parentView.postView');
-    return postView.get('screenTrack').track(this.get('elementId'), this.get('post.post_number'));
+    Discourse.ScreenTrack.instance().track(this.get('elementId'), this.get('post.post_number'));
+  },
+
+  willDestroyElement: function() {
+    Discourse.ScreenTrack.instance().stopTracking(this.get('elementId'));
   }
 
 });

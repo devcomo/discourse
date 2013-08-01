@@ -7,76 +7,6 @@
 **/
 Discourse.Development = {
 
-
-  /**
-    Set up probes for performance measurements.
-
-    @method setupProbes
-  **/
-  setupProbes: function() {
-
-    // Don't probe if we don't have a console
-    if (typeof console === "undefined" || console === null) return;
-
-    var topLevel = function(fn, name) {
-      return window.probes.measure(fn, {
-        name: name,
-
-        before: function(data, owner, args) {
-          if (owner) {
-            return window.probes.clear();
-          }
-        },
-
-        after: function(data, owner, args) {
-
-          if (typeof console === "undefined") return;
-          if (console === null) return;
-
-          var f, n, v;
-          if (owner && data.time > 10) {
-
-            f = function(name, data) {
-              if (data && data.count) return name + " - " + data.count + " calls " + ((data.time + 0.0).toFixed(2)) + "ms";
-            };
-
-            if (console.group) {
-              console.group(f(name, data));
-            } else {
-              console.log("");
-              console.log(f(name, data));
-            }
-
-            var ary = [];
-            for (n in window.probes) {
-              v = window.probes[n];
-              if (n === name || v.time < 1) continue;
-              ary.push({ k: n, v: v });
-            }
-            ary.sortBy(function(item) {
-              if (item.v && item.v.time) return -item.v.time;
-              return 0;
-            }).each(function(item) {
-              var output = f("" + item.k, item.v);
-              if (output) {
-                console.log(output);
-              }
-            });
-
-            if (console.group) {
-              console.groupEnd();
-            }
-            window.probes.clear();
-          }
-        }
-      });
-    };
-
-    Ember.View.prototype.renderToBuffer = window.probes.measure(Ember.View.prototype.renderToBuffer, "renderToBuffer");
-    Discourse.URL.routeTo = topLevel(Discourse.URL.routeTo, "Discourse.URL.routeTo");
-    Ember.run.end = topLevel(Ember.run.end, "Ember.run.end");
-  },
-
   /**
     Use the message bus for live reloading of components for faster development.
 
@@ -114,7 +44,7 @@ Discourse.Development = {
     // Observe file changes
     return Discourse.MessageBus.subscribe("/file-change", function(data) {
       Ember.TEMPLATES.empty = Handlebars.compile("<div></div>");
-      return data.each(function(me) {
+      _.each(data,function(me,idx) {
         var js;
         if (me === "refresh") {
           return document.location.reload(true);
@@ -123,14 +53,13 @@ Discourse.Development = {
           return $LAB.script(js + "?hash=" + me.hash).wait(function() {
             var templateName;
             templateName = js.replace(".js", "").replace("/assets/", "");
-            return $.each(Ember.View.views, function() {
-              var _this = this;
-              if (this.get('templateName') === templateName) {
-                this.set('templateName', 'empty');
-                this.rerender();
+            return _.each(Ember.View.views, function(view) {
+              if (view.get('templateName') === templateName) {
+                view.set('templateName', 'empty');
+                view.rerender();
                 Em.run.schedule('afterRender', function() {
-                  _this.set('templateName', templateName);
-                  _this.rerender();
+                  view.set('templateName', templateName);
+                  view.rerender();
                 });
               }
             });

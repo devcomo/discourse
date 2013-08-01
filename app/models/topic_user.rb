@@ -2,6 +2,15 @@ class TopicUser < ActiveRecord::Base
   belongs_to :user
   belongs_to :topic
 
+  scope :starred_since, lambda { |sinceDaysAgo| where('starred_at > ?', sinceDaysAgo.days.ago) }
+  scope :by_date_starred, -> { group('date(starred_at)').order('date(starred_at)') }
+
+  scope :tracking, lambda { |topic_id|
+    where(topic_id: topic_id)
+        .where("COALESCE(topic_users.notification_level, :regular) >= :tracking",
+                regular: TopicUser.notification_levels[:regular], tracking: TopicUser.notification_levels[:tracking])
+  }
+
   # Class methods
   class << self
 
@@ -60,8 +69,11 @@ class TopicUser < ActiveRecord::Base
     # it then creates the row instead.
     def change(user_id, topic_id, attrs)
       # Sometimes people pass objs instead of the ids. We can handle that.
-      topic_id = topic_id.id if topic_id.is_a?(Topic)
-      user_id = user_id.id if user_id.is_a?(User)
+      topic_id = topic_id.id if topic_id.is_a?(::Topic)
+      user_id = user_id.id if user_id.is_a?(::User)
+
+      topic_id = topic_id.to_i
+      user_id = user_id.to_i
 
       TopicUser.transaction do
         attrs = attrs.dup
@@ -75,7 +87,7 @@ class TopicUser < ActiveRecord::Base
 
         attrs_sql = attrs_array.map { |t| "#{t[0]} = ?" }.join(", ")
         vals = attrs_array.map { |t| t[1] }
-        rows = TopicUser.update_all([attrs_sql, *vals], topic_id: topic_id.to_i, user_id: user_id)
+        rows = TopicUser.where(topic_id: topic_id, user_id: user_id).update_all([attrs_sql, *vals])
 
         if rows == 0
           now = DateTime.now
@@ -86,7 +98,7 @@ class TopicUser < ActiveRecord::Base
             attrs[:notification_level] ||= notification_levels[:tracking]
           end
 
-          TopicUser.create(attrs.merge!(user_id: user_id, topic_id: topic_id.to_i, first_visited_at: now ,last_visited_at: now))
+          TopicUser.create(attrs.merge!(user_id: user_id, topic_id: topic_id, first_visited_at: now ,last_visited_at: now))
         else
           observe_after_save_callbacks_for topic_id, user_id
         end
@@ -97,7 +109,7 @@ class TopicUser < ActiveRecord::Base
 
     def track_visit!(topic,user)
       now = DateTime.now
-      rows = TopicUser.update_all({last_visited_at: now}, {topic_id: topic.id, user_id: user.id})
+      rows = TopicUser.where({topic_id: topic.id, user_id: user.id}).update_all({last_visited_at: now})
       if rows == 0
         TopicUser.create(topic_id: topic.id, user_id: user.id, last_visited_at: now, first_visited_at: now)
       else
@@ -147,7 +159,7 @@ class TopicUser < ActiveRecord::Base
                                        tu.topic_id = :topic_id AND
                                        tu.user_id = :user_id
                                   RETURNING
-                                    topic_users.notification_level, tu.notification_level old_level
+                                    topic_users.notification_level, tu.notification_level old_level, tu.last_read_post_number
                                 ",
                                 args).values
 
@@ -155,12 +167,20 @@ class TopicUser < ActiveRecord::Base
         before = rows[0][1].to_i
         after = rows[0][0].to_i
 
+        before_last_read = rows[0][2].to_i
+
+        if before_last_read < post_number
+          TopicTrackingState.publish_read(topic_id, post_number, user.id)
+        end
+
         if before != after
           MessageBus.publish("/topic/#{topic_id}", {notification_level_change: after}, user_ids: [user.id])
         end
       end
 
       if rows.length == 0
+        TopicTrackingState.publish_read(topic_id, post_number, user.id)
+
         args[:tracking] = notification_levels[:tracking]
         args[:regular] = notification_levels[:regular]
         args[:site_setting] = SiteSetting.auto_track_topics_after
@@ -184,8 +204,8 @@ class TopicUser < ActiveRecord::Base
     end
   end
 
-  def self.ensure_consistency!
-    exec_sql <<SQL
+  def self.ensure_consistency!(topic_id=nil)
+    builder = SqlBuilder.new <<SQL
 UPDATE topic_users t
   SET
     last_read_post_number = last_read,
@@ -199,13 +219,23 @@ JOIN (
   SELECT p.topic_id, MAX(p.post_number) max_post_number from posts p
   GROUP BY p.topic_id
 ) as Y on Y.topic_id = X.topic_id
-WHERE X.topic_id = t.topic_id AND
-      X.user_id = t.user_id AND
-      (
-        last_read_post_number <> last_read OR
-        seen_post_count <> LEAST(max_post_number,GREATEST(t.seen_post_count, last_read))
-      )
+/*where*/
 SQL
+
+    builder.where <<SQL
+X.topic_id = t.topic_id AND
+X.user_id = t.user_id AND
+(
+  last_read_post_number <> last_read OR
+  seen_post_count <> LEAST(max_post_number,GREATEST(t.seen_post_count, last_read))
+)
+SQL
+
+    if topic_id
+      builder.where("t.topic_id = :topic_id", topic_id: topic_id)
+    end
+
+    builder.exec
   end
 
 end

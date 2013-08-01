@@ -11,9 +11,6 @@ Discourse.HeaderView = Discourse.View.extend({
   classNames: ['d-header', 'clearfix'],
   classNameBindings: ['editingTopic'],
   templateName: 'header',
-  siteBinding: 'Discourse.site',
-  currentUserBinding: 'Discourse.currentUser',
-  categoriesBinding: 'site.categories',
   topicBinding: 'Discourse.router.topicController.content',
 
   showDropdown: function($target) {
@@ -60,50 +57,62 @@ Discourse.HeaderView = Discourse.View.extend({
       }));
 
       // We've seen all the notifications now
-      headerView.set('currentUser.unread_notifications', 0);
+      Discourse.User.current().set('unread_notifications', 0);
       headerView.showDropdown($('#user-notifications'));
     });
     return false;
   },
 
   examineDockHeader: function() {
-    var $body, offset, outlet;
-    if (!this.docAt) {
-      outlet = $('#main-outlet');
-      if (!(outlet && outlet.length === 1)) return;
-      this.docAt = outlet.offset().top;
-    }
-    offset = window.pageYOffset || $('html').scrollTop();
-    if (offset >= this.docAt) {
-      if (!this.dockedHeader) {
-        $body = $('body');
-        $body.addClass('docked');
-        this.dockedHeader = true;
+
+    var headerView = this;
+
+    // Check the dock after the current run loop. While rendering,
+    // it's much slower to calculate `outlet.offset()`
+    Em.run.next(function () {
+      if (!headerView.docAt) {
+        var outlet = $('#main-outlet');
+        if (!(outlet && outlet.length === 1)) return;
+        headerView.docAt = outlet.offset().top;
       }
-    } else {
-      if (this.dockedHeader) {
-        $('body').removeClass('docked');
-        this.dockedHeader = false;
+
+      var offset = window.pageYOffset || $('html').scrollTop();
+      if (offset >= headerView.docAt) {
+        if (!headerView.dockedHeader) {
+          $('body').addClass('docked');
+          headerView.dockedHeader = true;
+        }
+      } else {
+        if (headerView.dockedHeader) {
+          $('body').removeClass('docked');
+          headerView.dockedHeader = false;
+        }
       }
-    }
+    });
+
   },
 
   /**
     Display the correct logo in the header, showing a custom small icon if it exists.
-
+    In case the logo_url setting is empty, shows the site title as the logo.
     @property logoHTML
   **/
   logoHTML: function() {
     var result = "<div class='title'><a href='" + Discourse.getURL("/") + "'>";
     if (this.get('controller.showExtraInfo')) {
-      var logo = Discourse.SiteSettings.logo_small_url;
-      if (logo && logo.length > 1) {
-        result += "<img class='logo-small' src='" + logo + "' width='33' height='33'>";
+      var logoSmall = Discourse.SiteSettings.logo_small_url;
+      if (logoSmall && logoSmall.length > 1) {
+        result += "<img class='logo-small' src='" + logoSmall + "' width='33' height='33'>";
       } else {
         result += "<i class='icon-home'></i>";
       }
     } else {
-      result += "<img class='logo-big' src=\"" + Discourse.SiteSettings.logo_url + "\" alt=\"" + Discourse.SiteSettings.title + "\" id='site-logo'>";
+      var logo = Discourse.SiteSettings.logo_url;
+      if(logo && logo.length > 1) {
+        result += "<img class='logo-big' src=\"" + logo + "\" alt=\"" + Discourse.SiteSettings.title + "\" id='site-logo'>";
+      } else {
+        result += "<h2 class='text-logo' id='site-text-logo'>" + Discourse.SiteSettings.title + "</h2>";
+      }
     }
     result += "</a></div>";
     return new Handlebars.SafeString(result);
@@ -111,38 +120,41 @@ Discourse.HeaderView = Discourse.View.extend({
 
   willDestroyElement: function() {
     $(window).unbind('scroll.discourse-dock');
-    return $(document).unbind('touchmove.discourse-dock');
+    $(document).unbind('touchmove.discourse-dock');
+    this.$('a.unread-private-messages, a.unread-notifications, a[data-notifications]').off('click.notifications');
+    this.$('a[data-dropdown]').off('click.dropdown');
   },
 
   didInsertElement: function() {
-    var _this = this;
-    this.$('a[data-dropdown]').on('click', function(e) {
-      return _this.showDropdown($(e.currentTarget));
+
+    var headerView = this;
+    this.$('a[data-dropdown]').on('click.dropdown', function(e) {
+      return headerView.showDropdown($(e.currentTarget));
     });
-    this.$('a.unread-private-messages, a.unread-notifications, a[data-notifications]').on('click', function(e) {
-      return _this.showNotifications(e);
+    this.$('a.unread-private-messages, a.unread-notifications, a[data-notifications]').on('click.notifications', function(e) {
+      return headerView.showNotifications(e);
     });
     $(window).bind('scroll.discourse-dock', function() {
-      return _this.examineDockHeader();
+      headerView.examineDockHeader();
     });
     $(document).bind('touchmove.discourse-dock', function() {
-      return _this.examineDockHeader();
+      headerView.examineDockHeader();
     });
     this.examineDockHeader();
 
     // Delegate ESC to the composer
-    return $('body').on('keydown.header', function(e) {
+    $('body').on('keydown.header', function(e) {
       // Hide dropdowns
       if (e.which === 27) {
-        _this.$('li').removeClass('active');
-        _this.$('.d-dropdown').fadeOut('fast');
+        headerView.$('li').removeClass('active');
+        headerView.$('.d-dropdown').fadeOut('fast');
       }
-      if (_this.get('editingTopic')) {
+      if (headerView.get('editingTopic')) {
         if (e.which === 13) {
-          _this.finishedEdit();
+          headerView.finishedEdit();
         }
         if (e.which === 27) {
-          return _this.cancelEdit();
+          return headerView.cancelEdit();
         }
       }
     });

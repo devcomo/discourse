@@ -1,25 +1,14 @@
 require_dependency 'user_destroyer'
+require_dependency 'admin_user_index_query'
+require_dependency 'boost_trust_level'
 
 class Admin::UsersController < Admin::AdminController
 
+  before_filter :fetch_user, only: [:ban, :unban, :refresh_browsers, :revoke_admin, :grant_admin, :revoke_moderation, :grant_moderation, :approve, :activate, :deactivate, :block, :unblock, :trust_level]
+
   def index
-    # Sort order
-    if params[:query] == "active"
-      @users = User.order("COALESCE(last_seen_at, to_date('1970-01-01', 'YYYY-MM-DD')) DESC, username")
-    else
-      @users = User.order("created_at DESC, username")
-    end
-
-    if ['newuser', 'basic', 'regular', 'leader', 'elder'].include?(params[:query])
-      @users = @users.where('trust_level = ?', TrustLevel.levels[params[:query].to_sym])
-    end
-
-    @users = @users.where('admin = ?', true)      if params[:query] == 'admins'
-    @users = @users.where('moderator = ?', true)  if params[:query] == 'moderators'
-    @users = @users.where('approved = false')     if params[:query] == 'pending'
-    @users = @users.where('username_lower like :filter or email like :filter', filter: "%#{params[:filter]}%") if params[:filter].present?
-    @users = @users.take(100)
-    render_serialized(@users, AdminUserSerializer)
+    query = ::AdminUserIndexQuery.new(params)
+    render_serialized(query.find_users, AdminUserSerializer)
   end
 
   def show
@@ -35,7 +24,6 @@ class Admin::UsersController < Admin::AdminController
   end
 
   def ban
-    @user = User.where(id: params[:user_id]).first
     guardian.ensure_can_ban!(@user)
     @user.banned_till = params[:duration].to_i.days.from_now
     @user.banned_at = DateTime.now
@@ -45,7 +33,6 @@ class Admin::UsersController < Admin::AdminController
   end
 
   def unban
-    @user = User.where(id: params[:user_id]).first
     guardian.ensure_can_ban!(@user)
     @user.banned_till = nil
     @user.banned_at = nil
@@ -55,41 +42,42 @@ class Admin::UsersController < Admin::AdminController
   end
 
   def refresh_browsers
-    @user = User.where(id: params[:user_id]).first
     MessageBus.publish "/file-change", ["refresh"], user_ids: [@user.id]
     render nothing: true
   end
 
   def revoke_admin
-    @admin = User.where(id: params[:user_id]).first
-    guardian.ensure_can_revoke_admin!(@admin)
-    @admin.revoke_admin!
+    guardian.ensure_can_revoke_admin!(@user)
+    @user.revoke_admin!
     render nothing: true
   end
 
   def grant_admin
-    @user = User.where(id: params[:user_id]).first
     guardian.ensure_can_grant_admin!(@user)
     @user.grant_admin!
     render_serialized(@user, AdminUserSerializer)
   end
 
   def revoke_moderation
-    @moderator = User.where(id: params[:user_id]).first
-    guardian.ensure_can_revoke_moderation!(@moderator)
-    @moderator.revoke_moderation!
+    guardian.ensure_can_revoke_moderation!(@user)
+    @user.revoke_moderation!
     render nothing: true
   end
 
   def grant_moderation
-    @user = User.where(id: params[:user_id]).first
     guardian.ensure_can_grant_moderation!(@user)
     @user.grant_moderation!
     render_serialized(@user, AdminUserSerializer)
   end
 
+  def trust_level
+    guardian.ensure_can_change_trust_level!(@user)
+    logger = StaffActionLogger.new(current_user)
+    BoostTrustLevel.new(user: @user, level: params[:level], logger: logger).save!
+    render_serialized(@user, AdminUserSerializer)
+  end
+
   def approve
-    @user = User.where(id: params[:user_id]).first
     guardian.ensure_can_approve!(@user)
     @user.approve(current_user)
     render nothing: true
@@ -103,27 +91,48 @@ class Admin::UsersController < Admin::AdminController
   end
 
   def activate
-    @user = User.where(id: params[:user_id]).first
     guardian.ensure_can_activate!(@user)
     @user.activate
     render nothing: true
   end
 
   def deactivate
-    @user = User.where(id: params[:user_id]).first
     guardian.ensure_can_deactivate!(@user)
     @user.deactivate
+    render nothing: true
+  end
+
+  def block
+    guardian.ensure_can_block_user! @user
+    UserBlocker.block(@user, current_user)
+    render nothing: true
+  end
+
+  def unblock
+    guardian.ensure_can_unblock_user! @user
+    UserBlocker.unblock(@user, current_user)
     render nothing: true
   end
 
   def destroy
     user = User.where(id: params[:id]).first
     guardian.ensure_can_delete_user!(user)
-    if UserDestroyer.new(current_user).destroy(user)
-      render json: {deleted: true}
-    else
-      render json: {deleted: false, user: AdminDetailedUserSerializer.new(user, root: false).as_json}
+    begin
+      if UserDestroyer.new(current_user).destroy(user, params.slice(:delete_posts, :block_email, :context))
+        render json: {deleted: true}
+      else
+        render json: {deleted: false, user: AdminDetailedUserSerializer.new(user, root: false).as_json}
+      end
+    rescue UserDestroyer::PostsExistError
+      raise Discourse::InvalidAccess.new("User #{user.username} has #{user.post_count} posts, so can't be deleted.")
     end
   end
+
+
+  private
+
+    def fetch_user
+      @user = User.where(id: params[:user_id]).first
+    end
 
 end

@@ -14,7 +14,10 @@
     { "path": "lib" },
     { "path": "script" },
     { "path": "cookbooks" },
-    { "path": "spec" }
+    { "path": "spec" },
+    { "path": "test",
+      "folder_exclude_patterns": ["fixtures"]
+    }
   ],
   "settings":
   {

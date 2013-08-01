@@ -23,10 +23,15 @@ Discourse.Route = Em.Route.extend({
     $('.d-dropdown').hide();
     $('header ul.icons li').removeClass('active');
     $('[data-toggle="dropdown"]').parent().removeClass('open');
+    // close the lightbox
+    if ($.magnificPopup && $.magnificPopup.instance) { $.magnificPopup.instance.close(); }
+
+    Discourse.set('notifyCount',0);
 
     var hideDropDownFunction = $('html').data('hide-dropdown');
     if (hideDropDownFunction) return hideDropDownFunction();
   }
+
 });
 
 
@@ -38,6 +43,26 @@ Discourse.Route.reopenClass({
       if (oldBuilder) oldBuilder.call(this);
       return builder.call(this);
     };
+  },
+
+  /**
+    Shows a modal
+
+    @method showModal
+  **/
+  showModal: function(router, name, model) {
+    router.controllerFor('modal').set('modalClass', null);
+    router.render(name, {into: 'modal', outlet: 'modalBody'});
+    var controller = router.controllerFor(name);
+    if (controller) {
+      if (model) {
+        controller.set('model', model);
+      }
+      if(controller && controller.onShow) {
+        controller.onShow();
+      }
+      controller.set('flashMessage', null);
+    }
   }
 
 });

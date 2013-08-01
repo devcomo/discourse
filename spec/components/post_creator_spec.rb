@@ -10,40 +10,65 @@ describe PostCreator do
 
   let(:user) { Fabricate(:user) }
 
-  it 'raises an error without a raw value' do
-    lambda { PostCreator.new(user, {}) }.should raise_error(Discourse::InvalidParameters)
-  end
-
-  context 'new topic' do
+  context "new topic" do
     let(:category) { Fabricate(:category, user: user) }
     let(:topic) { Fabricate(:topic, user: user) }
-    let(:basic_topic_params) { {title: 'hello world topic', raw: 'my name is fred', archetype_id: 1} }
-    let(:image_sizes) { {'http://an.image.host/image.jpg' => {'width' => 111, 'height' => 222}} }
+    let(:basic_topic_params) { {title: "hello world topic", raw: "my name is fred", archetype_id: 1} }
+    let(:image_sizes) { {'http://an.image.host/image.jpg' => {"width" => 111, "height" => 222}} }
 
     let(:creator) { PostCreator.new(user, basic_topic_params) }
     let(:creator_with_category) { PostCreator.new(user, basic_topic_params.merge(category: category.name )) }
-    let(:creator_with_meta_data) { PostCreator.new(user, basic_topic_params.merge(meta_data: {hello: 'world'} )) }
+    let(:creator_with_meta_data) { PostCreator.new(user, basic_topic_params.merge(meta_data: {hello: "world"} )) }
     let(:creator_with_image_sizes) { PostCreator.new(user, basic_topic_params.merge(image_sizes: image_sizes)) }
 
-    it 'ensures the user can create the topic' do
+    it "can be created with auto tracking disabled" do
+      p = PostCreator.create(user, basic_topic_params.merge(auto_track: false))
+      # must be 0 otherwise it will think we read the topic which is clearly untrue
+      TopicUser.where(user_id: p.user_id, topic_id: p.topic_id).count.should == 0
+    end
+
+    it "ensures the user can create the topic" do
       Guardian.any_instance.expects(:can_create?).with(Topic,nil).returns(false)
       lambda { creator.create }.should raise_error(Discourse::InvalidAccess)
     end
 
-    context 'success' do
+
+    context "invalid title" do
+
+      let(:creator_invalid_title) { PostCreator.new(user, basic_topic_params.merge(title: 'a')) }
+
+      it "has errors" do
+        creator_invalid_title.create
+        expect(creator_invalid_title.errors).to be_present
+      end
+
+    end
+
+    context "success" do
 
       it "doesn't return true for spam" do
         creator.create
         creator.spam?.should be_false
       end
 
-      it 'generates the correct messages for a secure topic' do
+      it "does not notify on system messages" do
+        admin = Fabricate(:admin)
+        messages = MessageBus.track_publish do
+          p = PostCreator.create(admin, basic_topic_params.merge(post_type: Post.types[:moderator_action]))
+          PostCreator.create(admin, basic_topic_params.merge(topic_id: p.topic_id, post_type: Post.types[:moderator_action]))
+        end
+        # don't notify on system messages they introduce too much noise
+        channels = messages.map(&:channel)
+        channels.find{|s| s =~ /unread/}.should be_nil
+        channels.find{|s| s =~ /new/}.should be_nil
+      end
+
+      it "generates the correct messages for a secure topic" do
 
         admin = Fabricate(:admin)
 
         cat = Fabricate(:category)
-        cat.deny(:all)
-        cat.allow(Group[:admins])
+        cat.set_permissions(:admins => :full)
         cat.save
 
         created_post = nil
@@ -51,20 +76,22 @@ describe PostCreator do
 
         messages = MessageBus.track_publish do
           created_post = PostCreator.new(admin, basic_topic_params.merge(category: cat.name)).create
-          reply = PostCreator.new(admin, raw: 'this is my test reply 123 testing', topic_id: created_post.topic_id).create
+          reply = PostCreator.new(admin, raw: "this is my test reply 123 testing", topic_id: created_post.topic_id).create
         end
 
         topic_id = created_post.topic_id
 
 
-        messages.map{|m| m.channel}.sort.should == [ "/latest",
+        messages.map{|m| m.channel}.sort.should == [ "/new",
                                                      "/users/#{admin.username}",
                                                      "/users/#{admin.username}",
-                                                     "/topic/#{created_post.topic_id}",
-                                                     "/category/#{cat.slug}"
+                                                     "/unread/#{admin.id}",
+                                                     "/unread/#{admin.id}",
+                                                     "/topic/#{created_post.topic_id}"
                                                    ].sort
         admin_ids = [Group[:admins].id]
-        messages.any?{|m| m.group_ids != admin_ids}.should be_false
+
+        messages.any?{|m| m.group_ids != admin_ids && m.user_ids != [admin.id]}.should be_false
       end
 
       it 'generates the correct messages for a normal topic' do
@@ -75,13 +102,16 @@ describe PostCreator do
           topic_id = p.topic_id
         end
 
-        latest = messages.find{|m| m.channel == "/latest"}
+        latest = messages.find{|m| m.channel == "/new"}
         latest.should_not be_nil
+
+        read = messages.find{|m| m.channel == "/unread/#{p.user_id}"}
+        read.should_not be_nil
 
         user_action = messages.find{|m| m.channel == "/users/#{p.user.username}"}
         user_action.should_not be_nil
 
-        messages.length.should == 2
+        messages.length.should == 3
       end
 
       it 'extracts links from the post' do
@@ -124,8 +154,15 @@ describe PostCreator do
 
       it 'increases topic response counts' do
         first_post = creator.create
-        user2 = Fabricate(:coding_horror)
 
+        # ensure topic user is correct
+        topic_user = first_post.user.topic_users.where(topic_id: first_post.topic_id).first
+        topic_user.should be_present
+        topic_user.should be_posted
+        topic_user.last_read_post_number.should == first_post.post_number
+        topic_user.seen_post_count.should == first_post.post_number
+
+        user2 = Fabricate(:coding_horror)
         user2.topic_reply_count.should == 0
         first_post.user.reload.topic_reply_count.should == 0
 
@@ -203,9 +240,17 @@ describe PostCreator do
     end
 
     it "does not create the post" do
+      GroupMessage.stubs(:create)
       creator.create
       creator.errors.should be_present
       creator.spam?.should be_true
+    end
+
+    it "sends a message to moderators" do
+      GroupMessage.expects(:create).with do |group_name, msg_type, params|
+        group_name == Group[:moderators].name and msg_type == :spam_post_blocked and params[:user].id == user.id
+      end
+      creator.create
     end
 
   end
@@ -230,6 +275,20 @@ describe PostCreator do
 
     end
 
+  end
+
+  context "cooking options" do
+    let(:raw) { "this is my awesome message body hello world" }
+
+    it "passes the cooking options through correctly" do
+      creator = PostCreator.new(user,
+                                title: 'hi there welcome to my topic',
+                                raw: raw,
+                                cooking_options: { traditional_markdown_linebreaks: true })
+
+      Post.any_instance.expects(:cook).with(raw, has_key(:traditional_markdown_linebreaks)).returns(raw)
+      creator.create
+    end
   end
 
   # integration test ... minimise db work
@@ -304,6 +363,14 @@ describe PostCreator do
     it 'acts correctly' do
       topic.created_at.should be_within(10.seconds).of(created_at)
       post.created_at.should be_within(10.seconds).of(created_at)
+    end
+  end
+
+  context 'disable validations' do
+    it 'can save a post' do
+      creator = PostCreator.new(user, raw: 'q', title: 'q', skip_validations: true)
+      post = creator.create
+      creator.errors.should be_nil
     end
   end
 end

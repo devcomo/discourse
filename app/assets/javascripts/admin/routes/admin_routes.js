@@ -14,7 +14,11 @@ Discourse.Route.buildRoutes(function() {
       this.resource('adminSiteContentEdit', {path: '/:content_type'});
     });
 
-    this.route('email_logs', { path: '/email_logs' });
+    this.resource('adminEmail', { path: '/email'}, function() {
+      this.route('logs', { path: '/logs' });
+      this.route('previewDigest', { path: '/preview-digest' });
+    });
+
     this.route('customize', { path: '/customize' });
     this.route('api', {path: '/api'});
 
@@ -30,17 +34,10 @@ Discourse.Route.buildRoutes(function() {
     this.resource('adminUsers', { path: '/users' }, function() {
       this.resource('adminUser', { path: '/:username' });
       this.resource('adminUsersList', { path: '/list' }, function() {
-        this.route('active', { path: '/active' });
-        this.route('new', { path: '/new' });
-        this.route('pending', { path: '/pending' });
-        this.route('admins', { path: '/admins' });
-        this.route('moderators', { path: '/moderators' });
-        // Trust Levels:
-        this.route('newuser', { path: '/newuser' });
-        this.route('basic', { path: '/basic' });
-        this.route('regular', { path: '/regular' });
-        this.route('leaders', { path: '/leaders' });
-        this.route('elders', { path: '/elders' });
+        _.each(['active', 'new', 'pending', 'admins', 'moderators', 'blocked', 'banned',
+                'newuser', 'basic', 'regular', 'leaders', 'elders'], function(x) {
+          this.route(x, { path: '/' + x });
+        }, this);
       });
     });
 

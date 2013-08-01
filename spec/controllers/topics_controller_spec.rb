@@ -2,6 +2,44 @@ require 'spec_helper'
 
 describe TopicsController do
 
+
+
+  context 'wordpress' do
+    let!(:user) { log_in(:moderator) }
+    let(:p1) { Fabricate(:post, user: user) }
+    let(:topic) { p1.topic }
+    let!(:p2) { Fabricate(:post, topic: topic, user:user )}
+
+    it "returns the JSON in the format our wordpress plugin needs" do
+      xhr :get, :wordpress, topic_id: topic.id, best: 3
+      response.should be_success
+      json = ::JSON.parse(response.body)
+      json.should be_present
+
+      # The JSON has the data the wordpress plugin needs
+      json['id'].should == topic.id
+      json['posts_count'].should == 2
+      json['filtered_posts_count'].should == 2
+
+      # Posts
+      json['posts'].size.should == 1
+      post = json['posts'][0]
+      post['id'].should == p2.id
+      post['username'].should == user.username
+      post['avatar_template'].should == user.avatar_template
+      post['name'].should == user.name
+      post['created_at'].should be_present
+      post['cooked'].should == p2.cooked
+
+      # Participants
+      json['participants'].size.should == 1
+      participant = json['participants'][0]
+      participant['id'].should == user.id
+      participant['username'].should == user.username
+      participant['avatar_template'].should == user.avatar_template
+    end
+  end
+
   context 'move_posts' do
     it 'needs you to be logged in' do
       lambda { xhr :post, :move_posts, topic_id: 111, title: 'blah', post_ids: [1,2,3] }.should raise_error(Discourse::NotLoggedIn)
@@ -13,7 +51,7 @@ describe TopicsController do
       let(:topic) { p1.topic }
 
       it "raises an error without postIds" do
-        lambda { xhr :post, :move_posts, topic_id: topic.id, title: 'blah' }.should raise_error(Discourse::InvalidParameters)
+        lambda { xhr :post, :move_posts, topic_id: topic.id, title: 'blah' }.should raise_error(ActionController::ParameterMissing)
       end
 
       it "raises an error when the user doesn't have permission to move the posts" do
@@ -106,7 +144,7 @@ describe TopicsController do
       let(:topic) { p1.topic }
 
       it "raises an error without destination_topic_id" do
-        lambda { xhr :post, :merge_topic, topic_id: topic.id }.should raise_error(Discourse::InvalidParameters)
+        lambda { xhr :post, :merge_topic, topic_id: topic.id }.should raise_error(ActionController::ParameterMissing)
       end
 
       it "raises an error when the user doesn't have permission to merge" do
@@ -144,11 +182,11 @@ describe TopicsController do
     let(:raw) { 'this body is long enough to search for' }
 
     it "requires a title" do
-      -> { xhr :get, :similar_to, raw: raw }.should raise_error(Discourse::InvalidParameters)
+      -> { xhr :get, :similar_to, raw: raw }.should raise_error(ActionController::ParameterMissing)
     end
 
     it "requires a raw body" do
-      -> { xhr :get, :similar_to, title: title }.should raise_error(Discourse::InvalidParameters)
+      -> { xhr :get, :similar_to, title: title }.should raise_error(ActionController::ParameterMissing)
     end
 
     it "raises an error if the title length is below the minimum" do
@@ -161,9 +199,40 @@ describe TopicsController do
       -> { xhr :get, :similar_to, title: title, raw: raw }.should raise_error(Discourse::InvalidParameters)
     end
 
-    it "delegates to Topic.similar_to" do
-      Topic.expects(:similar_to).with(title, raw).returns([Fabricate(:topic)])
-      xhr :get, :similar_to, title: title, raw: raw
+    describe "minimum_topics_similar" do
+
+      before do
+        SiteSetting.stubs(:minimum_topics_similar).returns(30)
+      end
+
+      after do
+        xhr :get, :similar_to, title: title, raw: raw
+      end
+
+      describe "With enough topics" do
+        before do
+          Topic.stubs(:count).returns(50)
+        end
+
+        it "deletes to Topic.similar_to if there are more topics than `minimum_topics_similar`" do
+          Topic.expects(:similar_to).with(title, raw, nil).returns([Fabricate(:topic)])
+        end
+
+        describe "with a logged in user" do
+          let(:user) { log_in }
+
+          it "passes a user through if logged in" do
+            Topic.expects(:similar_to).with(title, raw, user).returns([Fabricate(:topic)])
+          end
+        end
+
+      end
+
+      it "does not call Topic.similar_to if there are fewer topics than `minimum_topics_similar`" do
+        Topic.stubs(:count).returns(10)
+        Topic.expects(:similar_to).never
+      end
+
     end
 
   end
@@ -218,11 +287,11 @@ describe TopicsController do
       end
 
       it 'requires the status parameter' do
-        lambda { xhr :put, :status, topic_id: @topic.id, enabled: true }.should raise_error(Discourse::InvalidParameters)
+        lambda { xhr :put, :status, topic_id: @topic.id, enabled: true }.should raise_error(ActionController::ParameterMissing)
       end
 
       it 'requires the enabled parameter' do
-        lambda { xhr :put, :status, topic_id: @topic.id, status: 'visible' }.should raise_error(Discourse::InvalidParameters)
+        lambda { xhr :put, :status, topic_id: @topic.id, status: 'visible' }.should raise_error(ActionController::ParameterMissing)
       end
 
       it 'raises an error with a status not in the whitelist' do
@@ -282,12 +351,12 @@ describe TopicsController do
       end
 
       it "changes the user's starred flag when the parameter is present" do
-        Topic.any_instance.expects(:toggle_mute).with(@topic.user, true)
+        Topic.any_instance.expects(:toggle_mute).with(@topic.user)
         xhr :put, :mute, topic_id: @topic.id, starred: 'true'
       end
 
       it "removes the user's starred flag when the parameter is not true" do
-        Topic.any_instance.expects(:toggle_mute).with(@topic.user, false)
+        Topic.any_instance.expects(:toggle_mute).with(@topic.user)
         xhr :put, :unmute, topic_id: @topic.id, starred: 'false'
       end
 
@@ -322,6 +391,37 @@ describe TopicsController do
         xhr :put, :star, topic_id: @topic.id, starred: 'false'
       end
     end
+  end
+
+  describe 'recover' do
+    it "won't allow us to recover a topic when we're not logged in" do
+      lambda { xhr :put, :recover, topic_id: 1 }.should raise_error(Discourse::NotLoggedIn)
+    end
+
+    describe 'when logged in' do
+      let(:topic) { Fabricate(:topic, user: log_in, deleted_at: Time.now, deleted_by: log_in) }
+
+      describe 'without access' do
+        it "raises an exception when the user doesn't have permission to delete the topic" do
+          Guardian.any_instance.expects(:can_recover_topic?).with(topic).returns(false)
+          xhr :put, :recover, topic_id: topic.id
+          response.should be_forbidden
+        end
+      end
+
+      context 'with permission' do
+        before do
+          Guardian.any_instance.expects(:can_recover_topic?).with(topic).returns(true)
+        end
+
+        it 'succeeds' do
+          Topic.any_instance.expects(:recover!)
+          xhr :put, :recover, topic_id: topic.id
+          response.should be_success
+        end
+      end
+    end
+
   end
 
   describe 'delete' do
@@ -369,18 +469,45 @@ describe TopicsController do
     let!(:p2) { Fabricate(:post, user: topic.user) }
 
     it 'shows a topic correctly' do
-      xhr :get, :show, id: topic.id
+      xhr :get, :show, topic_id: topic.id, slug: topic.slug
       response.should be_success
     end
 
+    it 'can find a topic given a slug in the id param' do
+      xhr :get, :show, id: topic.slug
+      expect(response).to redirect_to(topic.relative_url)
+    end
+
+    it 'returns 404 when an invalid slug is given and no id' do
+      xhr :get, :show, id: 'nope-nope'
+      expect(response.status).to eq(404)
+    end
+
+    it 'returns a 404 when slug and topic id do not match a topic' do
+      xhr :get, :show, topic_id: 123123, slug: 'topic-that-is-made-up'
+      expect(response.status).to eq(404)
+    end
+
+    context 'a topic with nil slug exists' do
+      before do
+        @nil_slug_topic = Fabricate(:topic)
+        Topic.connection.execute("update topics set slug=null where id = #{@nil_slug_topic.id}") # can't find a way to set slug column to null using the model
+      end
+
+      it 'returns a 404 when slug and topic id do not match a topic' do
+        xhr :get, :show, topic_id: 123123, slug: 'topic-that-is-made-up'
+        expect(response.status).to eq(404)
+      end
+    end
+
     it 'records a view' do
-      lambda { xhr :get, :show, id: topic.id }.should change(View, :count).by(1)
+      lambda { xhr :get, :show, topic_id: topic.id, slug: topic.slug }.should change(View, :count).by(1)
     end
 
     it 'tracks a visit for all html requests' do
       current_user = log_in(:coding_horror)
       TopicUser.expects(:track_visit!).with(topic, current_user)
-      get :show, id: topic.id
+      get :show, topic_id: topic.id, slug: topic.slug
     end
 
     context 'consider for a promotion' do
@@ -394,7 +521,7 @@ describe TopicsController do
       it "reviews the user for a promotion if they're new" do
         user.update_column(:trust_level, TrustLevel.levels[:newuser])
         Promotion.any_instance.expects(:review)
-        get :show, id: topic.id
+        get :show, topic_id: topic.id, slug: topic.slug
       end
     end
 
@@ -402,39 +529,47 @@ describe TopicsController do
 
       it 'grabs first page when no filter is provided' do
         SiteSetting.stubs(:posts_per_page).returns(20)
-        TopicView.any_instance.expects(:filter_posts_in_range).with(0, 20)
-        xhr :get, :show, id: topic.id
+        TopicView.any_instance.expects(:filter_posts_in_range).with(0, 19)
+        xhr :get, :show, topic_id: topic.id, slug: topic.slug
       end
 
       it 'grabs first page when first page is provided' do
         SiteSetting.stubs(:posts_per_page).returns(20)
-        TopicView.any_instance.expects(:filter_posts_in_range).with(0, 20)
-        xhr :get, :show, id: topic.id, page: 1
+        TopicView.any_instance.expects(:filter_posts_in_range).with(0, 19)
+        xhr :get, :show, topic_id: topic.id, slug: topic.slug, page: 1
       end
 
       it 'grabs correct range when a page number is provided' do
         SiteSetting.stubs(:posts_per_page).returns(20)
-        TopicView.any_instance.expects(:filter_posts_in_range).with(20, 40)
-        xhr :get, :show, id: topic.id, page: 2
+        TopicView.any_instance.expects(:filter_posts_in_range).with(20, 39)
+        xhr :get, :show, topic_id: topic.id, slug: topic.slug, page: 2
       end
 
       it 'delegates a post_number param to TopicView#filter_posts_near' do
         TopicView.any_instance.expects(:filter_posts_near).with(p2.post_number)
-        xhr :get, :show, id: topic.id, post_number: p2.post_number
+        xhr :get, :show, topic_id: topic.id, slug: topic.slug, post_number: p2.post_number
       end
-
-      it 'delegates a posts_after param to TopicView#filter_posts_after' do
-        TopicView.any_instance.expects(:filter_posts_after).with(p1.post_number)
-        xhr :get, :show, id: topic.id, posts_after: p1.post_number
-      end
-
-      it 'delegates a posts_before param to TopicView#filter_posts_before' do
-        TopicView.any_instance.expects(:filter_posts_before).with(p2.post_number)
-        xhr :get, :show, id: topic.id, posts_before: p2.post_number
-      end
-
     end
 
+    context "when 'login required' site setting has been enabled" do
+      before { SiteSetting.stubs(:login_required?).returns(true) }
+
+      context 'and the user is logged in' do
+        before { log_in(:coding_horror) }
+
+        it 'shows the topic' do
+          get :show, topic_id: topic.id, slug: topic.slug
+          expect(response).to be_successful
+        end
+      end
+
+      context 'and the user is not logged in' do
+        it 'redirects to the login page' do
+          get :show, topic_id: topic.id, slug: topic.slug
+          expect(response).to redirect_to login_path
+        end
+      end
+    end
   end
 
   describe '#feed' do
@@ -487,6 +622,11 @@ describe TopicsController do
           xhr :put, :update, topic_id: @topic.id, slug: @topic.title, category: 'incredible'
         end
 
+        it "returns errors with invalid titles" do
+          xhr :put, :update, topic_id: @topic.id, slug: @topic.title, title: 'asdf'
+          expect(response).not_to be_success
+        end
+
       end
     end
   end
@@ -502,7 +642,7 @@ describe TopicsController do
       end
 
       it 'requires an email parameter' do
-        lambda { xhr :post, :invite, topic_id: @topic.id }.should raise_error(Discourse::InvalidParameters)
+        lambda { xhr :post, :invite, topic_id: @topic.id }.should raise_error(ActionController::ParameterMissing)
       end
 
       describe 'without permission' do
@@ -578,17 +718,12 @@ describe TopicsController do
       end
 
       it "can set a topic's auto close time" do
-        Topic.any_instance.expects(:auto_close_days=).with { |arg| arg.to_i == 3 }
+        Topic.any_instance.expects(:set_auto_close).with("3", @admin)
         xhr :put, :autoclose, topic_id: @topic.id, auto_close_days: 3
       end
 
       it "can remove a topic's auto close time" do
-        Topic.any_instance.expects(:auto_close_days=).with(nil)
-        xhr :put, :autoclose, topic_id: @topic.id, auto_close_days: nil
-      end
-
-      it "sets the topic closer to the current user" do
-        Topic.any_instance.expects(:auto_close_user=).with(@admin)
+        Topic.any_instance.expects(:set_auto_close).with(nil, anything)
         xhr :put, :autoclose, topic_id: @topic.id, auto_close_days: nil
       end
     end

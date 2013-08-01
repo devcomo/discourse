@@ -94,8 +94,10 @@ describe User do
     let(:user) { Fabricate(:user) }
     let(:admin) { Fabricate(:admin) }
 
-    it "generates a welcome message" do
-      user.expects(:enqueue_welcome_message).with('welcome_approved')
+    it "enqueues a 'signup after approval' email" do
+      Jobs.expects(:enqueue).with(
+        :user_email, has_entries(type: :signup_after_approval)
+      )
       user.approve(admin)
     end
 
@@ -194,6 +196,19 @@ describe User do
       end
     end
 
+    describe 'change the case of my username' do
+      let!(:myself) { Fabricate(:user, username: 'hansolo') }
+
+      it 'should return true' do
+        myself.change_username('HanSolo').should be_true
+      end
+
+      it 'should change the username' do
+        myself.change_username('HanSolo')
+        myself.reload.username.should == 'HanSolo'
+      end
+    end
+
   end
 
   describe 'delete posts' do
@@ -208,12 +223,10 @@ describe User do
 
     it 'allows moderator to delete all posts' do
       @user.delete_all_posts!(@guardian)
+      expect(Post.where(id: @posts.map(&:id))).to be_empty
       @posts.each do |p|
-        p.reload
-        if p
-          p.topic.should be_nil
-        else
-          p.should be_nil
+        if p.post_number == 1
+          expect(Topic.where(id: p.topic_id).first).to be_nil
         end
       end
     end
@@ -411,10 +424,6 @@ describe User do
   end
 
   describe 'name heuristics' do
-    it 'is able to guess a decent username from an email' do
-      User.suggest_username('bob@bob.com').should == 'bob'
-    end
-
     it 'is able to guess a decent name from an email' do
       User.suggest_name('sam.saffron@gmail.com').should == 'Sam Saffron'
     end
@@ -473,64 +482,6 @@ describe User do
 
     it 'returns false when a username is taken' do
       User.username_available?(Fabricate(:user).username).should be_false
-    end
-  end
-
-  describe '.suggest_username' do
-
-    it "doesn't raise an error on nil username" do
-      User.suggest_username(nil).should be_nil
-    end
-
-    it 'corrects weird characters' do
-      User.suggest_username("Darth%^Vader").should == "Darth_Vader"
-    end
-
-    it 'adds 1 to an existing username' do
-      user = Fabricate(:user)
-      User.suggest_username(user.username).should == "#{user.username}1"
-    end
-
-    it "adds numbers if it's too short" do
-      User.suggest_username('a').should == 'a11'
-    end
-
-    it "has a special case for me and i emails" do
-      User.suggest_username('me@eviltrout.com').should == 'eviltrout'
-      User.suggest_username('i@eviltrout.com').should == 'eviltrout'
-    end
-
-    it "shortens very long suggestions" do
-      User.suggest_username("myreallylongnameisrobinwardesquire").should == 'myreallylongnam'
-    end
-
-    it "makes room for the digit added if the username is too long" do
-      User.create(username: 'myreallylongnam', email: 'fake@discourse.org')
-      User.suggest_username("myreallylongnam").should == 'myreallylongna1'
-    end
-
-    it "removes leading character if it is not alphanumeric" do
-      User.suggest_username("_myname").should == 'myname'
-    end
-
-    it "removes trailing characters if they are invalid" do
-      User.suggest_username("myname!^$=").should == 'myname'
-    end
-
-    it "replace dots" do
-      User.suggest_username("my.name").should == 'my_name'
-    end
-
-    it "remove leading dots" do
-      User.suggest_username(".myname").should == 'myname'
-    end
-
-    it "remove trailing dots" do
-      User.suggest_username("myname.").should == 'myname'
-    end
-
-    it 'should handle typical facebook usernames' do
-      User.suggest_username('roger.nelson.3344913').should == 'roger_nelson_33'
     end
   end
 
@@ -616,7 +567,7 @@ describe User do
 
   describe 'passwords' do
     before do
-      @user = Fabricate.build(:user)
+      @user = Fabricate.build(:user, active: false)
       @user.password = "ilovepasta"
       @user.save!
     end
@@ -646,68 +597,38 @@ describe User do
   end
 
   describe "previous_visit_at" do
+
     let(:user) { Fabricate(:user) }
+    let!(:first_visit_date) { Time.zone.now }
+    let!(:second_visit_date) { 2.hours.from_now }
+    let!(:third_visit_date) { 5.hours.from_now }
 
     before do
       SiteSetting.stubs(:active_user_rate_limit_secs).returns(0)
+      SiteSetting.stubs(:previous_visit_timeout_hours).returns(1)
     end
 
-    it "should be blank on creation" do
+    it "should act correctly" do
       user.previous_visit_at.should be_nil
-    end
 
-    describe "first time" do
-      let!(:first_visit_date) { DateTime.now }
+      # first visit
+      user.update_last_seen!(first_visit_date)
+      user.previous_visit_at.should be_nil
 
-      before do
-        DateTime.stubs(:now).returns(first_visit_date)
-        user.update_last_seen!
-      end
+      # updated same time
+      user.update_last_seen!(first_visit_date)
+      user.reload
+      user.previous_visit_at.should be_nil
 
-      it "should have no value" do
-        user.previous_visit_at.should be_nil
-      end
+      # second visit
+      user.update_last_seen!(second_visit_date)
+      user.reload
+      user.previous_visit_at.should be_within_one_second_of(first_visit_date)
 
-      describe "another call right after" do
-        before do
-          # A different time, to make sure it doesn't change
-          DateTime.stubs(:now).returns(10.minutes.from_now)
-          user.update_last_seen!
-        end
-
-        it "still has no value" do
-          user.previous_visit_at.should be_nil
-        end
-      end
-
-      describe "second visit" do
-        let!(:second_visit_date) { 2.hours.from_now }
-
-        before do
-          DateTime.stubs(:now).returns(second_visit_date)
-          user.update_last_seen!
-        end
-
-        it "should have the previous visit value" do
-          user.previous_visit_at.should == first_visit_date
-        end
-
-        describe "third visit" do
-          let!(:third_visit_date) { 5.hours.from_now }
-
-          before do
-            DateTime.stubs(:now).returns(third_visit_date)
-            user.update_last_seen!
-          end
-
-          it "should have the second visit value" do
-            user.previous_visit_at.should == second_visit_date
-          end
-
-        end
-
-      end
-
+      # third visit
+      user.update_last_seen!(third_visit_date)
+      user.reload
+      user.previous_visit_at.should be_within_one_second_of(second_visit_date)
     end
 
   end
@@ -724,15 +645,19 @@ describe User do
     end
 
     describe 'with no previous values' do
-      let!(:date) { DateTime.now }
+      let!(:date) { Time.zone.now }
 
       before do
-        DateTime.stubs(:now).returns(date)
+        Timecop.freeze(date)
         user.update_last_seen!
       end
 
+      after do
+        Timecop.return
+      end
+
       it "updates last_seen_at" do
-        user.last_seen_at.should == date
+        user.last_seen_at.should be_within_one_second_of(date)
       end
 
       it "should have 0 for days_visited" do
@@ -747,10 +672,14 @@ describe User do
       context "called twice" do
 
         before do
-          DateTime.stubs(:now).returns(date)
+          Timecop.freeze(date)
           user.update_last_seen!
           user.update_last_seen!
           user.reload
+        end
+
+        after do
+          Timecop.return
         end
 
         it "doesn't increase days_visited twice" do
@@ -763,8 +692,12 @@ describe User do
         let!(:future_date) { 3.days.from_now }
 
         before do
-          DateTime.stubs(:now).returns(future_date)
+          Timecop.freeze(future_date)
           user.update_last_seen!
+        end
+
+        after do
+          Timecop.return
         end
 
         it "should log a second visited_at record when we log an update later" do
@@ -836,6 +769,34 @@ describe User do
 
   end
 
+  describe "bio link stripping" do
+
+    it "returns an empty string with no bio" do
+      expect(Fabricate.build(:user).bio_excerpt).to be_blank
+    end
+
+    context "with a user that has a link in their bio" do
+      let(:user) { Fabricate.build(:user, bio_raw: "im sissy and i love http://ponycorns.com") }
+
+      before do
+        # Let's cook that bio up good
+        user.send(:cook)
+      end
+
+      it "includes the link if the user is not new" do
+        expect(user.bio_excerpt).to eq("im sissy and i love <a href='http://ponycorns.com' rel='nofollow'>http://ponycorns.com</a>")
+        expect(user.bio_processed).to eq("<p>im sissy and i love <a href=\"http://ponycorns.com\" rel=\"nofollow\">http://ponycorns.com</a></p>")
+      end
+
+      it "removes the link if the user is new" do
+        user.trust_level = TrustLevel.levels[:newuser]
+        expect(user.bio_excerpt).to eq("im sissy and i love http://ponycorns.com")
+        expect(user.bio_processed).to eq("<p>im sissy and i love http://ponycorns.com</p>")
+      end
+    end
+
+  end
+
   describe 'update_time_read!' do
     let(:user) { Fabricate(:user) }
 
@@ -881,4 +842,19 @@ describe User do
     end
   end
 
+  describe '#find_by_username_or_email' do
+    it 'works correctly' do
+      bob = Fabricate(:user, username: 'bob', name: 'bobs', email: 'bob@bob.com')
+      bob2 = Fabricate(:user, username: 'bob2', name: 'bobs', email: 'bob2@bob.com')
+
+      expect(User.find_by_username_or_email('bob22@bob.com')).to eq(nil)
+      expect(User.find_by_username_or_email('bobs')).to eq(nil)
+
+      expect(User.find_by_username_or_email('bob2')).to eq(bob2)
+      expect(User.find_by_username_or_email('bob2@BOB.com')).to eq(bob2)
+
+      expect(User.find_by_username_or_email('bob')).to eq(bob)
+      expect(User.find_by_username_or_email('bob@BOB.com')).to eq(bob)
+    end
+  end
 end

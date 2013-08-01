@@ -1,13 +1,14 @@
 /**
-  Basic route for admin flags
+  Handles routes related to viewing flags.
 
-  @class AdminFlagsRoute    
+  @class AdminFlagsRoute
   @extends Discourse.Route
   @namespace Discourse
   @module Discourse
 **/
+
 Discourse.AdminFlagsRoute = Discourse.Route.extend({
-  renderTemplate: function() {
-    this.render('admin/templates/flags');
+  redirect: function() {
+    this.transitionTo('adminFlags.active');
   }
 });

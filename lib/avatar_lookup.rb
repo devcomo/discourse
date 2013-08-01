@@ -1,35 +1,19 @@
 class AvatarLookup
 
-  def initialize(user_ids)
-    @user_ids = user_ids
-
-    @user_ids.flatten!
-    @user_ids.compact! if @user_ids.present?
-    @user_ids.uniq! if @user_ids.present?
-
-    @loaded = false
+  def initialize(user_ids=[])
+    @user_ids = user_ids.tap(&:compact!).tap(&:uniq!).tap(&:flatten!)
   end
 
   # Lookup a user by id
   def [](user_id)
-    ensure_loaded!
-    @users_hashed[user_id]
+    users[user_id]
   end
 
+  private
 
-  protected
-
-    def ensure_loaded!
-      return if @loaded
-
-      @users_hashed = {}
-      # need email for hash
-      User.where(id: @user_ids).select([:id, :email, :email, :username]).each do |u|
-        @users_hashed[u.id] = u
-      end
-
-      @loaded = true
+  def users
+    @users ||= User.where(:id => @user_ids).select([:id, :email, :username]).inject({}) do |hash, user|
+      hash.merge({user.id => user})
     end
-
-
+  end
 end

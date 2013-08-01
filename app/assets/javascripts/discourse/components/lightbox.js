@@ -8,12 +8,10 @@
 Discourse.Lightbox = {
   apply: function($elem) {
     var _this = this;
-    return $('a.lightbox', $elem).each(function(i, e) {
-      return $LAB.script("/javascripts/jquery.colorbox-min.js").wait(function() {
-        return $(e).colorbox();
+    $LAB.script("/javascripts/jquery.magnific-popup-min.js").wait(function() {
+      $('a.lightbox', $elem).each(function(i, e) {
+        $(e).magnificPopup({ type: 'image', closeOnContentClick: true });
       });
     });
   }
-}
-
-
+};

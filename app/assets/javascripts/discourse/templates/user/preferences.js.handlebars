@@ -4,7 +4,7 @@
     <label class="control-label">{{i18n user.username.title}}</label>
     <div class="controls">
       <span class='static'>{{username}}</span>
-      {{#linkTo "preferences.username" class="btn pad-left"}}{{i18n user.change_username.action}}{{/linkTo}}
+      {{#linkTo "preferences.username" class="btn pad-left"}}{{i18n user.change}}{{/linkTo}}
     </div>
     <div class='instructions'>
       {{{i18n user.username.short_instructions username="username"}}}
@@ -25,7 +25,7 @@
     <label class="control-label">{{i18n user.email.title}}</label>
     <div class="controls">
       <span class='static'>{{email}}</span>
-      {{#linkTo "preferences.email" class="btn pad-left"}}{{i18n user.change_email.action}}{{/linkTo}}
+      {{#linkTo "preferences.email" class="btn pad-left"}}{{i18n user.change}}{{/linkTo}}
     </div>
     <div class='instructions'>
       {{i18n user.email.instructions}}
@@ -35,7 +35,7 @@
   <div class="control-group">
     <label class="control-label">{{i18n user.password.title}}</label>
     <div class="controls">
-      <a href="#" {{action changePassword}} class='btn'>{{i18n user.change_password.action}}</a> {{passwordProgress}}
+      <a href="#" {{action changePassword}} class='btn'>{{i18n user.change}}</a> {{passwordProgress}}
     </div>
   </div>
 
@@ -52,7 +52,7 @@
   <div class="control-group">
     <label class="control-label">{{i18n user.bio}}</label>
     <div class="controls">
-      {{view Discourse.PagedownEditor valueBinding="bio_raw"}}
+      {{pagedown value=bio_raw}}
     </div>
   </div>
 
@@ -71,7 +71,7 @@
 
       {{#if email_digests}}
         <div class='control-indent'>
-          {{view Discourse.ComboboxView valueAttribute="value" contentBinding="digestFrequencies" valueBinding="digest_after_days"}}
+          {{combobox valueAttribute="value" content=digestFrequencies value=digest_after_days}}
         </div>
       {{/if}}
       <label>{{view Ember.Checkbox checkedBinding="email_private_messages"}}
@@ -85,15 +85,16 @@
   </div>
 
   <div class="control-group other">
+
     <label class="control-label">{{i18n user.other_settings}}</label>
     <div class="controls">
       <label>{{i18n user.auto_track_topics}}</label>
-      {{view Discourse.ComboboxView valueAttribute="value" contentBinding="autoTrackDurations" valueBinding="auto_track_topics_after_msecs"}}
+      {{combobox valueAttribute="value" content=autoTrackDurations value=auto_track_topics_after_msecs}}
     </div>
 
     <div class="controls">
       <label>{{i18n user.new_topic_duration.label}}</label>
-      {{view Discourse.ComboboxView valueAttribute="value" contentBinding="considerNewTopicOptions" valueBinding="new_topic_duration_minutes"}}
+      {{combobox valueAttribute="value" content=considerNewTopicOptions value=new_topic_duration_minutes}}
     </div>
 
     <div class="controls">
@@ -102,6 +103,14 @@
       <label>{{view Ember.Checkbox checkedBinding="enable_quoting"}}
       {{i18n user.enable_quoting}}</label>
     </div>
+
+    <div class="controls">
+      <label>
+        {{view Ember.Checkbox checkedBinding="dynamic_favicon"}}
+        {{i18n user.dynamic_favicon}}
+      </label>
+    </div>
+
   </div>
 
   <div class="control-group">

@@ -14,12 +14,30 @@ Discourse.AdminFlagsController = Ember.ArrayController.extend({
     @method clearFlags
     @param {Discourse.FlaggedPost} item The post whose flags we want to clear
   **/
-  clearFlags: function(item) {
-    var _this = this;
-    item.clearFlags().then((function() {
-      _this.removeObject(item);
+  disagreeFlags: function(item) {
+    var adminFlagsController = this;
+    item.disagreeFlags().then((function() {
+      adminFlagsController.removeObject(item);
     }), function() {
-      bootbox.alert(Em.String.i18n("admin.flags.error"));
+      bootbox.alert(I18n.t("admin.flags.error"));
+    });
+  },
+
+  agreeFlags: function(item) {
+    var adminFlagsController = this;
+    item.agreeFlags().then((function() {
+      adminFlagsController.removeObject(item);
+    }), function() {
+      bootbox.alert(I18n.t("admin.flags.error"));
+    });
+  },
+
+  deferFlags: function(item) {
+    var adminFlagsController = this;
+    item.deferFlags().then((function() {
+      adminFlagsController.removeObject(item);
+    }), function() {
+      bootbox.alert(I18n.t("admin.flags.error"));
     });
   },
 
@@ -30,12 +48,22 @@ Discourse.AdminFlagsController = Ember.ArrayController.extend({
     @param {Discourse.FlaggedPost} item The post to delete
   **/
   deletePost: function(item) {
-    var _this = this;
+    var adminFlagsController = this;
     item.deletePost().then((function() {
-      _this.removeObject(item);
+      adminFlagsController.removeObject(item);
     }), function() {
-      bootbox.alert(Em.String.i18n("admin.flags.error"));
+      bootbox.alert(I18n.t("admin.flags.error"));
     });
+  },
+
+  /**
+    Deletes a user and all posts and topics created by that user.
+
+    @method deleteSpammer
+    @param {Discourse.FlaggedPost} item The post to delete
+  **/
+  deleteSpammer: function(item) {
+    item.get('user').deleteAsSpammer(function() { window.location.reload(); });
   },
 
   /**
@@ -43,17 +71,13 @@ Discourse.AdminFlagsController = Ember.ArrayController.extend({
 
     @property adminOldFlagsView
   **/
-  adminOldFlagsView: (function() {
-    return this.query === 'old';
-  }).property('query'),
+  adminOldFlagsView: Em.computed.equal('query', 'old'),
 
   /**
     Are we viewing the 'active' view?
 
     @property adminActiveFlagsView
   **/
-  adminActiveFlagsView: (function() {
-    return this.query === 'active';
-  }).property('query')
+  adminActiveFlagsView: Em.computed.equal('query', 'active')
 
 });

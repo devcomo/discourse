@@ -2,6 +2,9 @@ require 'cache'
 
 module Discourse
 
+  # Expected less matches than what we got in a find
+  class TooManyMatches < Exception; end
+
   # When they try to do something they should be logged in for
   class NotLoggedIn < Exception; end
 
@@ -14,13 +17,47 @@ module Discourse
   # When something they want is not found
   class NotFound < Exception; end
 
+  # When a setting is missing
+  class SiteSettingMissing < Exception; end
+
+  # Cross site request forgery
+  class CSRF < Exception; end
+
+  def self.activate_plugins!
+    @plugins = Plugin.find_all("#{Rails.root}/plugins")
+    @plugins.each do |plugin|
+      plugin.activate!
+    end
+  end
+
+  def self.plugins
+    @plugins
+  end
+
+  def self.auth_providers
+    providers = []
+    if plugins
+      plugins.each do |p|
+        next unless p.auth_providers
+        p.auth_providers.each do |prov|
+          providers << prov
+        end
+      end
+    end
+    providers
+  end
+
   def self.cache
     @cache ||= Cache.new
   end
 
   # Get the current base URL for the current site
   def self.current_hostname
-    RailsMultisite::ConnectionManagement.current_hostname
+    if SiteSetting.force_hostname.present?
+      SiteSetting.force_hostname
+    else
+      RailsMultisite::ConnectionManagement.current_hostname
+    end
   end
 
   def self.base_uri default_value=""
@@ -32,14 +69,19 @@ module Discourse
   end
 
   def self.base_url_no_prefix
+    default_port = 80
     protocol = "http"
-    protocol = "https" if SiteSetting.use_ssl?
-    if SiteSetting.force_hostname.present?
-      result = "#{protocol}://#{SiteSetting.force_hostname}"
-    else
-      result = "#{protocol}://#{current_hostname}"
+
+    if SiteSetting.use_ssl?
+      protocol = "https"
+      default_port = 443
     end
-    result << ":#{SiteSetting.port}" if SiteSetting.port.present? && SiteSetting.port.to_i > 0
+
+    result = "#{protocol}://#{current_hostname}"
+
+    port = SiteSetting.port.present? && SiteSetting.port.to_i > 0 ? SiteSetting.port.to_i : default_port
+
+    result << ":#{SiteSetting.port}" if port != default_port
     result
   end
 

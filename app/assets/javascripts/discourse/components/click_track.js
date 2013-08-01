@@ -38,7 +38,7 @@ Discourse.ClickTrack = {
         userId = $link.data('user-id');
 
     if (!userId) userId = $article.data('user-id');
-    var ownLink = userId && (userId === Discourse.get('currentUser.id'));
+    var ownLink = userId && (userId === Discourse.User.current('id'));
 
     // Build a Redirect URL
     var trackingUrl = Discourse.getURL("/clicks/track?url=" + encodeURIComponent(href));
@@ -85,7 +85,7 @@ Discourse.ClickTrack = {
     }
 
     // If we're on the same site, use the router and track via AJAX
-    if (href.indexOf(Discourse.URL.origin()) === 0) {
+    if ((href.indexOf(Discourse.URL.origin()) === 0) && !href.match(/\/uploads\//i)) {
       Discourse.ajax("/clicks/track", {
         data: {
           url: href,
@@ -99,7 +99,7 @@ Discourse.ClickTrack = {
     }
 
     // Otherwise, use a custom URL with a redirect
-    if (Discourse.get('currentUser.external_links_in_new_tab')) {
+    if (Discourse.User.current('external_links_in_new_tab')) {
       var win = window.open(trackingUrl, '_blank');
       win.focus();
     } else {
@@ -109,5 +109,3 @@ Discourse.ClickTrack = {
     return false;
   }
 };
-
-
